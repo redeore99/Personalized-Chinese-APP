@@ -4,6 +4,7 @@ import HomePage from './pages/HomePage'
 import ReviewPage from './pages/ReviewPage'
 import WritePage from './pages/WritePage'
 import AddCardPage from './pages/AddCardPage'
+import PinLock from './components/PinLock'
 import { getStats } from './lib/db'
 
 // SVG Icons as components
@@ -51,6 +52,7 @@ function App() {
   }, [])
 
   return (
+    <PinLock>
     <HashRouter>
       <Routes>
         <Route path="/" element={<HomePage stats={stats} onRefresh={refreshStats} />} />
@@ -100,6 +102,7 @@ function App() {
         </NavLink>
       </nav>
     </HashRouter>
+    </PinLock>
   )
 }
 

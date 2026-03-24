@@ -387,3 +387,93 @@ textarea.input {
   stroke-width: 1;
   stroke-dasharray: 4 4;
 }
+
+/* ---- PIN Lock Screen ---- */
+.pin-lock-screen {
+  position: fixed;
+  inset: 0;
+  background: var(--bg-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.pin-lock-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 24px;
+  width: 100%;
+  max-width: 340px;
+}
+
+.pin-lock-icon {
+  font-size: 56px;
+  margin-bottom: 16px;
+}
+
+.pin-lock-title {
+  font-size: 24px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.pin-lock-subtitle {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-bottom: 32px;
+  line-height: 1.4;
+}
+
+.pin-input-wrapper {
+  position: relative;
+  width: 100%;
+  max-width: 200px;
+  margin-bottom: 8px;
+}
+
+.pin-input {
+  width: 100%;
+  padding: 16px;
+  background: transparent;
+  border: none;
+  color: transparent;
+  font-size: 24px;
+  text-align: center;
+  letter-spacing: 16px;
+  outline: none;
+  caret-color: transparent;
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+.pin-dots {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  padding: 16px 0;
+}
+
+.pin-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--text-muted);
+  transition: all 0.15s ease;
+}
+
+.pin-dot.filled {
+  background: var(--accent);
+  border-color: var(--accent);
+  transform: scale(1.1);
+}
+
+.pin-error {
+  color: var(--error);
+  font-size: 13px;
+  font-weight: 500;
+  margin-top: 8px;
+}

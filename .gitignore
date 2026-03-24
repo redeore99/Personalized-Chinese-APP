@@ -25,3 +25,8 @@ npm-debug.log*
 
 # Claude Cowork
 .claude/
+
+# Security - never commit these
+*.pem
+*.key
+_push_*.html
