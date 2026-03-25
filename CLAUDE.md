@@ -1,130 +1,129 @@
-# Mission Control — 汉字学习 (Chinese Study App)
+# Mission Control - Chinese Study App
 
-## What This Is
-A personal Chinese character study PWA (Progressive Web App) for a single user (Pablo). The app uses spaced repetition (SM-2 algorithm) and stroke-order writing practice (HanziWriter) to help learn Chinese characters. All data is stored locally in the browser via IndexedDB (Dexie.js).
+## Non-Optional Maintenance Rule
+If you change the app in any meaningful way, you must refresh the project guidance files before you finish. Do not leave the repo with stale setup, security, or deployment docs.
 
-## Tech Stack
-- **Frontend**: React 18 + Vite 6
-- **Routing**: React Router v6 (HashRouter)
-- **Database**: Dexie.js (IndexedDB wrapper) — all data is local, no backend
-- **Writing**: HanziWriter for stroke-by-stroke practice
-- **PWA**: vite-plugin-pwa (offline-capable, installable)
-- **Styling**: Custom CSS, dark theme, mobile-first
-- **Auth**: Client-side PIN lock (SHA-256 hashed, stored in localStorage)
-- **Backup**: AES-256-GCM encrypted export/import (PBKDF2 key derivation from PIN)
+At minimum, review and update these files whenever they are affected:
+- `AGENTS.md`
+- `CLAUDE.md`
+- `README.md`
+- `SETUP.md`
+- `SETUP.local.md` if private local instructions change
 
-## Project Structure
-```
-src/
-  main.jsx              — React entry point
-  App.jsx               — Router, nav bar (5 tabs), PinLock wrapper
-  index.css             — All styles (dark theme)
-  components/
-    PinLock.jsx          — PIN lock screen (setup, unlock, lockout, security alerts)
-  pages/
-    HomePage.jsx         — Dashboard with stats (due, reviewed, known, total)
-    ReviewPage.jsx       — Flashcard review with SRS ratings (Again/Hard/Good/Easy)
-    WritePage.jsx        — Stroke-order writing practice with HanziWriter
-    AddCardPage.jsx      — Add new characters with pinyin, meaning, examples, tags
-    SettingsPage.jsx     — Backup/restore, security log viewer
-  lib/
-    db.js               — Dexie database schema, CRUD operations, stats queries
-    srs.js              — SM-2 algorithm (calculateNextReview, previewIntervals)
-    backup.js           — AES-256-GCM encrypted export/import
-```
+If the change touches database schema, auth, sync, environment variables, deployment, backups, routing, or user setup flow, updating these docs is part of the task, not optional cleanup.
 
-## Security Policy
+## What This Project Is
+This is a single-owner Chinese study PWA with:
+- spaced repetition review
+- Hanzi writing practice
+- a local Dexie/IndexedDB cache
+- Supabase Auth and Postgres for account login and cloud sync
+- Vercel deployment from GitHub
 
-### Threat Model
-This is a personal study app. The primary threats are:
-1. **Casual unauthorized use** — Someone opens the app and reviews cards, corrupting the SRS schedule.
-2. **Data loss** — Browser data gets cleared, device breaks, or someone maliciously wipes localStorage/IndexedDB.
-3. **Data snooping** — Someone inspects browser storage to see what you're studying (low sensitivity, but still private).
+The old local PIN lock system has been removed. Do not describe it as the current architecture and do not reintroduce it casually.
 
-### Defenses in Place
+## Current Architecture
+- `src/main.jsx`
+  Wraps the app in `AuthProvider` and `SyncProvider`.
+- `src/App.jsx`
+  Routes the app and gates everything behind `AuthGate`.
+- `src/components/AuthGate.jsx`
+  Shows the setup screen when Supabase env vars are missing and the sign-in form when auth is required.
+- `src/contexts/AuthContext.jsx`
+  Loads the Supabase session, signs in with email/password, signs out, and rejects unauthorized accounts.
+- `src/contexts/SyncContext.jsx`
+  Runs cloud sync on login, on focus, every 30 seconds, and on manual actions from Settings.
+- `src/lib/supabase.js`
+  Creates the client with `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`.
+  It also accepts legacy `VITE_SUPABASE_ANON_KEY` as a fallback.
+- `src/lib/db.js`
+  Dexie schema plus local CRUD helpers. Local records carry sync metadata such as `syncId`, `updatedAt`, `dirty`, and `deletedAt`.
+- `src/lib/sync.js`
+  Pulls remote rows into Dexie and pushes dirty local rows back to Supabase.
+- `src/lib/backup.js`
+  Encrypted export and restore for the local cache using a separate backup password.
+- `src/pages/SettingsPage.jsx`
+  Shows account status, sync actions, backup export/import, and local data counts.
+- `supabase/schema.sql`
+  Public generic SQL schema with placeholder email.
+- `supabase/schema.local.sql`
+  Local-only, gitignored SQL schema containing the real allowed email.
+- `SETUP.md`
+  Public setup instructions.
+- `SETUP.local.md`
+  Local-only notes for private user-specific setup details.
 
-#### PIN Lock (src/components/PinLock.jsx)
-- PIN is **SHA-256 hashed with a salt** before storage — never stored in plaintext.
-- PIN is required on every new session (uses sessionStorage, clears when browser closes).
-- **Failed attempt logging**: Every wrong PIN is logged with timestamp, user agent, and event type (`wrong_pin` or `tamper_detected`) to localStorage.
-- **Escalating lockout**: After 5 failed attempts, the app locks for 5 minutes. Continued failures escalate to 15m, 30m, then 60m lockouts.
-- **Security alert**: On successful login, if there were failed attempts since the last login, a prominent warning screen is shown with timestamps before the user can proceed. Tamper events are highlighted with a TAMPER label. User must acknowledge the alert.
+## Security Model
+- The app is intended for one manually created Supabase account.
+- The allowed identity is enforced in Supabase, not in a public frontend env var.
+- `public.app_config.allowed_email` stores the allowed email.
+- `public.is_allowed_user()` compares the authenticated email from the JWT to that allowed email.
+- Row Level Security policies require both:
+  - `public.is_allowed_user()`
+  - `auth.uid() = owner_id`
+- Composite foreign keys keep related rows owner-scoped, so cards, decks, and logs cannot be cross-linked across users.
+- The frontend must only use the browser-safe Supabase values:
+  - `VITE_SUPABASE_URL`
+  - `VITE_SUPABASE_PUBLISHABLE_KEY`
+- Never put a Supabase secret key or service role key in frontend code, tracked files, or Vercel env meant for the client bundle.
+- The browser stores a session token after login. It should not store the user's password.
+- Backups are encrypted with AES-256-GCM using a separate backup password and only contain the local study cache.
+- Backups do not include Supabase auth state, session tokens, or the removed legacy PIN metadata.
+- `src/lib/db.js` still contains a legacy `security` table only so old IndexedDB upgrades remain compatible. It is not the active auth system.
 
-#### Tamper Detection (src/components/PinLock.jsx + src/lib/db.js)
-- The PIN hash is stored redundantly in **both localStorage and IndexedDB** (`security` table).
-- On every app load, both stores are cross-checked.
-- If localStorage has been cleared but IndexedDB retains the hash, the PIN is **automatically restored** from IndexedDB, a `tamper_detected` event is logged, and a **Tampering Detected** alert is shown to the user.
-- This prevents the bypass attack where an attacker clears localStorage to trigger "first-time setup" and create their own PIN.
-- The tamper flag persists across sessions until the legitimate user authenticates and acknowledges it.
+## Operational Rules For Agents
+Treat external services as part of the implementation. If a code change also requires Supabase, Vercel, or GitHub actions, you must tell the user exactly what to do and where to click.
 
-#### Encrypted Backup (src/lib/backup.js)
-- Exports ALL data (cards, decks, review logs, writing logs, **and security metadata**) as a single encrypted file.
-- **Security metadata in backups**: PIN hash, failed attempt log, last login timestamp, and IndexedDB security entries are all included in the encrypted payload. A full restore recovers the complete security state.
-- Encryption: **AES-256-GCM** with key derived from PIN via **PBKDF2** (100,000 iterations, SHA-256).
-- Each backup has a unique random salt (16 bytes) and IV (12 bytes).
-- The backup file contains **zero plaintext data** — only `{ salt, iv, ciphertext }` in base64.
-- Import requires the same PIN to decrypt. Wrong PIN = decryption fails gracefully.
-- Restore is atomic (Dexie transaction) — either everything restores or nothing does.
-- On restore, security metadata is written back to both localStorage and IndexedDB, fully restoring the security perimeter.
+Examples:
+- If you change database schema or RLS:
+  Update `supabase/schema.sql`.
+  If the private owner-specific schema also changes, update `supabase/schema.local.sql`.
+  Tell the user they must rerun the SQL manually in Supabase SQL Editor.
+- If you change auth or client configuration:
+  Update `.env.example`, `SETUP.md`, and any setup copy shown in the UI.
+  Tell the user which Vercel env vars must be changed and that a redeploy is required.
+- If you change deployment behavior:
+  Update `README.md` and `SETUP.md`.
+  Tell the user whether GitHub, Vercel, or both need follow-up steps.
+- If you change private user-specific setup:
+  Update `SETUP.local.md` and any local-only files that hold private values.
 
-#### What's NOT Sensitive
-- No passwords, tokens, or API keys are stored anywhere.
-- No personal information beyond Chinese study cards.
-- The PIN hash in localStorage is not useful to an attacker (salted SHA-256).
-- The failed attempts log contains only timestamps, user agents, and event types — no PINs or guesses.
+Do not stop at "the code is changed" if the app will still be broken until the user updates Supabase, Vercel, or GitHub.
 
-### Security Guidelines for Development
-When working on this app, always:
-- **Never store the PIN in plaintext** — always hash or use as key derivation input.
-- **Never add cloud sync or backend calls** without revisiting the security model.
-- **Never log or expose card data** in unencrypted form outside the app.
-- **Keep backups encrypted** — the user's PIN is the only key.
-- **Maintain the lockout system** — do not bypass or weaken it.
-- **Test the security alert flow** — failed attempts must always surface to the user on next login.
-- **Keep the dual-store PIN hash in sync** — any code that writes the PIN hash to localStorage must also write it to IndexedDB via `setSecurityValue('pinHash', hash)`.
-- **Never remove the tamper detection** — the IndexedDB cross-check is the last line of defense against localStorage clearing attacks.
+## Privacy Rules
+- Keep tracked files generic.
+- Do not commit the owner's real email, private URLs, passwords, tokens, or secret keys.
+- Keep user-specific private values only in gitignored local files such as:
+  - `SETUP.local.md`
+  - `supabase/schema.local.sql`
+- If you need to personalize setup for the owner, prefer local-only files and dashboard guidance over tracked public files.
 
-## Key Design Decisions
-- **Single-user app**: Protected by a PIN lock. No multi-user accounts or backend auth.
-- **Offline-first**: Works without internet once installed as PWA.
-- **SRS integrity**: The PIN lock exists specifically to prevent others from using the app and corrupting the spaced repetition schedule.
-- **Local data only**: No cloud sync. All cards, review history, and writing logs live in IndexedDB.
-- **Defense in depth**: PIN lock (prevention) + attempt logging (detection) + tamper detection (integrity) + encrypted backup (recovery).
+## Deployment Reality
+- GitHub is the source that Vercel deploys from.
+- Supabase schema changes are manual. Editing SQL files in the repo does not update the live database automatically.
+- Vercel environment variable changes require a redeploy before they affect production.
+- Local development is optional for using the app, but `npm run build` should still be used to verify code changes when possible.
 
-## Current Status (v0.1)
+## Current Feature Snapshot
+Working now:
+- account sign-in with Supabase email/password
+- single-account enforcement through Supabase schema and RLS
+- deck, card, review, and writing data synced through Supabase
+- local Dexie cache for normal app reads and offline-friendly behavior
+- manual `Sync Now` and `Upload Local Data to Cloud` actions
+- encrypted local backup export/import with a separate backup password
+- mobile-friendly PWA deployment on Vercel
 
-### Working
-- Card creation (character, pinyin, meaning, examples, tags, notes)
-- Flashcard review with SM-2 SRS scheduling
-- Writing practice with HanziWriter (stroke quiz, hints, animation)
-- Home dashboard with stats (due count, reviewed today, known words, total)
-- PWA installable with offline support
-- PIN lock screen with escalating lockout, security alerts, and tamper detection
-- Encrypted backup/restore (AES-256-GCM) with security metadata
-- Settings page with security log viewer
-- Dark theme, mobile-first responsive design (5-tab navigation)
+Still missing or incomplete:
+- dictionary auto-fill
+- full card edit/delete flows
+- search and browse UI
+- richer stats and charts
+- audio playback
+- more advanced conflict handling or migrations beyond the current sync model
 
-### Not Yet Built / TODO
-- Dictionary lookup / auto-fill (CC-CEDICT integration) when adding cards
-- Deck management (create, organize cards into decks)
-- Card editing and deletion UI
-- Search/browse all cards
-- Detailed stats page (review history graphs, accuracy trends, streak tracking)
-- Settings: reset/change PIN
-- Settings: adjust SRS parameters, daily review limits
-- Audio pronunciation playback
-- Multi-character writing practice (currently only first char is practiced)
-- Tag-based filtering for reviews
-- Undo last review rating
-
-## Development
-```bash
-npm install
-npm run dev      # http://localhost:5173
-npm run build    # Production build
-npm run preview  # Preview production build
-```
-
-## Deployment
-Static site on Vercel. Pushes to `main` auto-deploy.
-Repo: github.com/redeore99/chinese-study-app
+## Quick Checks Before Finishing Work
+- Run or request a build verification when code changed.
+- Search for stale references to removed architecture, especially the old PIN model.
+- Check whether setup docs still match the current env vars, auth flow, and deployment flow.
+- Check whether the user needs manual follow-up in Supabase, Vercel, or GitHub.

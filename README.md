@@ -1,2 +1,38 @@
-# Personalized Chinese APP
+# Personalized Chinese App
 
+A single-owner Chinese study PWA with spaced repetition review, Hanzi writing practice, Supabase account auth, cloud sync, and a local Dexie cache for fast browser storage.
+
+## Current Stack
+- React 18 + Vite 6
+- React Router v6 with `HashRouter`
+- Dexie.js for local IndexedDB storage
+- Supabase Auth + Postgres + Row Level Security
+- HanziWriter for writing practice
+- Vercel for deployment from GitHub
+
+## Important Architecture Notes
+- The app no longer uses the old local PIN lock model.
+- Supabase auth is the entry point to the app.
+- Supabase stores the canonical cloud data.
+- Dexie remains the local cache and offline-friendly layer.
+- Encrypted backups use a separate backup password and are still useful as an extra recovery path.
+
+## Setup
+- Public setup guide: [SETUP.md](/C:/Users/pablo/Desktop/Personalized%20Chinese%20APP/SETUP.md)
+- Private local notes: `SETUP.local.md` and `supabase/schema.local.sql`
+
+Tracked files stay generic on purpose. Private owner-specific values should stay in local ignored files and in the Supabase or Vercel dashboards.
+
+## Operational Reality
+- GitHub push updates the source Vercel deploys from.
+- Supabase SQL files do not apply themselves automatically. Schema changes must be run manually in Supabase SQL Editor.
+- Vercel environment variable changes require a redeploy.
+- If app behavior changes, the project guidance files should be refreshed so future sessions inherit the correct architecture.
+
+## Development
+```bash
+npm install
+npm run dev
+npm run build
+npm run preview
+```
