@@ -14,6 +14,8 @@ create or replace function public.is_allowed_user()
 returns boolean
 language sql
 stable
+security definer
+set search_path = public
 as $$
   select lower(coalesce(auth.jwt() ->> 'email', '')) = lower(
     coalesce((select allowed_email from public.app_config where singleton = true), '')
