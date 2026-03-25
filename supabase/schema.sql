@@ -15,10 +15,14 @@ returns boolean
 language sql
 stable
 security definer
-set search_path = public
+set search_path = public, auth
 as $$
-  select lower(coalesce(auth.jwt() ->> 'email', '')) = lower(
-    coalesce((select allowed_email from public.app_config where singleton = true), '')
+  select exists (
+    select 1
+    from public.app_config config
+    join auth.users users_table on users_table.id = auth.uid()
+    where config.singleton = true
+      and lower(trim(coalesce(users_table.email, ''))) = lower(trim(coalesce(config.allowed_email, '')))
   );
 $$;
 
