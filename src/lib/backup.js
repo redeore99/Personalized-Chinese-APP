@@ -3,21 +3,22 @@ import { db } from './db'
 /**
  * Encrypted backup/restore for the Chinese Study App.
  *
- * Uses AES-GCM (256-bit) with a key derived from the user's PIN via PBKDF2.
- * The backup file contains NO plaintext data — everything is encrypted.
+ * Uses AES-GCM (256-bit) with a key derived from a user-provided backup
+ * password via PBKDF2.
  *
- * File format: JSON with { salt, iv, ciphertext } — all base64-encoded.
+ * File format: JSON with { salt, iv, ciphertext } - all base64-encoded.
  */
 
-async function deriveKey(pin, salt) {
+async function deriveKey(password, salt) {
   const encoder = new TextEncoder()
   const keyMaterial = await crypto.subtle.importKey(
     'raw',
-    encoder.encode(pin),
+    encoder.encode(password),
     'PBKDF2',
     false,
     ['deriveKey']
   )
+
   return crypto.subtle.deriveKey(
     {
       name: 'PBKDF2',
@@ -51,46 +52,32 @@ function base64ToBuffer(base64) {
 }
 
 /**
- * Export all app data as an AES-GCM encrypted file.
- * @param {string} pin - The user's PIN (used to derive the encryption key)
+ * Export study data as an AES-GCM encrypted file.
+ * @param {string} password - Backup password used to derive the encryption key
  * @returns {Blob} - Encrypted backup file
  */
-export async function exportBackup(pin) {
-  // Collect all data from Dexie
-  const securityEntries = await db.security.toArray().catch(() => [])
+export async function exportBackup(password) {
   const data = {
-    version: 2,
+    version: 3,
     exportedAt: new Date().toISOString(),
     cards: await db.cards.toArray(),
     decks: await db.decks.toArray(),
     reviewLog: await db.reviewLog.toArray(),
-    writingLog: await db.writingLog.toArray(),
-    // Security metadata (encrypted alongside everything else)
-    security: {
-      pinHash: localStorage.getItem('chinestudy_pin_hash'),
-      failedAttempts: JSON.parse(localStorage.getItem('chinestudy_failed_attempts') || '[]'),
-      lastLogin: localStorage.getItem('chinestudy_last_login'),
-      idbSecurity: securityEntries
-    }
+    writingLog: await db.writingLog.toArray()
   }
 
   const plaintext = new TextEncoder().encode(JSON.stringify(data))
 
-  // Generate random salt and IV
   const salt = crypto.getRandomValues(new Uint8Array(16))
   const iv = crypto.getRandomValues(new Uint8Array(12))
+  const key = await deriveKey(password, salt)
 
-  // Derive key from PIN
-  const key = await deriveKey(pin, salt)
-
-  // Encrypt
   const ciphertext = await crypto.subtle.encrypt(
     { name: 'AES-GCM', iv },
     key,
     plaintext
   )
 
-  // Package as JSON
   const backup = {
     format: 'hanzi-study-backup',
     version: 1,
@@ -104,11 +91,11 @@ export async function exportBackup(pin) {
 
 /**
  * Import and restore from an encrypted backup file.
- * @param {string} pin - The user's PIN (used to derive the decryption key)
+ * @param {string} password - Backup password used to derive the decryption key
  * @param {File|Blob} file - The encrypted backup file
  * @returns {object} - { success, cardCount, message }
  */
-export async function importBackup(pin, file) {
+export async function importBackup(password, file) {
   const text = await file.text()
   let backup
 
@@ -125,9 +112,7 @@ export async function importBackup(pin, file) {
   const salt = new Uint8Array(base64ToBuffer(backup.salt))
   const iv = new Uint8Array(base64ToBuffer(backup.iv))
   const ciphertext = base64ToBuffer(backup.ciphertext)
-
-  // Derive key from PIN
-  const key = await deriveKey(pin, salt)
+  const key = await deriveKey(password, salt)
 
   let plaintext
   try {
@@ -138,7 +123,7 @@ export async function importBackup(pin, file) {
     )
     plaintext = new TextDecoder().decode(decrypted)
   } catch {
-    return { success: false, message: 'Wrong PIN or corrupted backup file.' }
+    return { success: false, message: 'Wrong backup password or corrupted backup file.' }
   }
 
   let data
@@ -148,9 +133,7 @@ export async function importBackup(pin, file) {
     return { success: false, message: 'Backup data is corrupted.' }
   }
 
-  // Restore data — clear existing and replace
   const tables = [db.cards, db.decks, db.reviewLog, db.writingLog]
-  if (db.security) tables.push(db.security)
 
   await db.transaction('rw', tables, async () => {
     await db.cards.clear()
@@ -162,26 +145,7 @@ export async function importBackup(pin, file) {
     if (data.decks?.length) await db.decks.bulkAdd(data.decks)
     if (data.reviewLog?.length) await db.reviewLog.bulkAdd(data.reviewLog)
     if (data.writingLog?.length) await db.writingLog.bulkAdd(data.writingLog)
-
-    // Restore security metadata to IndexedDB
-    if (db.security && data.security?.idbSecurity?.length) {
-      await db.security.clear()
-      await db.security.bulkAdd(data.security.idbSecurity)
-    }
   })
-
-  // Restore security metadata to localStorage
-  if (data.security) {
-    if (data.security.pinHash) {
-      localStorage.setItem('chinestudy_pin_hash', data.security.pinHash)
-    }
-    if (data.security.failedAttempts?.length) {
-      localStorage.setItem('chinestudy_failed_attempts', JSON.stringify(data.security.failedAttempts))
-    }
-    if (data.security.lastLogin) {
-      localStorage.setItem('chinestudy_last_login', data.security.lastLogin)
-    }
-  }
 
   return {
     success: true,

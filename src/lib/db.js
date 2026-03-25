@@ -18,7 +18,7 @@ db.version(2).stores({
   decks: '++id, name, createdAt',
   reviewLog: '++id, cardId, reviewedAt, rating, intervalDays',
   writingLog: '++id, cardId, practicedAt, score, strokeCount',
-  // Security: tamper-proof storage for PIN hash (redundant copy of localStorage)
+  // Device-local security metadata
   security: 'key'
 })
 
@@ -30,12 +30,12 @@ db.version(3).stores({
   security: 'key'
 })
 
-// Store a security value in IndexedDB (tamper-resistant)
+// Store a device-local security value in IndexedDB
 export async function setSecurityValue(key, value) {
   await db.security.put({ key, value, updatedAt: new Date().toISOString() })
 }
 
-// Retrieve a security value from IndexedDB
+// Retrieve a device-local security value from IndexedDB
 export async function getSecurityValue(key) {
   const entry = await db.security.get(key)
   return entry ? entry.value : null

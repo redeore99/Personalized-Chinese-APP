@@ -4,7 +4,7 @@ import { exportBackup, importBackup, downloadBlob } from '../lib/backup'
 const FAILED_ATTEMPTS_KEY = 'chinestudy_failed_attempts'
 
 export default function SettingsPage() {
-  const [pinInput, setPinInput] = useState('')
+  const [backupPassword, setBackupPassword] = useState('')
   const [status, setStatus] = useState(null) // { type: 'success'|'error', message }
   const [importing, setImporting] = useState(false)
   const [exporting, setExporting] = useState(false)
@@ -20,18 +20,18 @@ export default function SettingsPage() {
   })()
 
   const handleExport = async () => {
-    if (pinInput.length < 4) {
-      setStatus({ type: 'error', message: 'Enter your PIN to encrypt the backup.' })
+    if (backupPassword.trim().length < 4) {
+      setStatus({ type: 'error', message: 'Enter a backup password to encrypt the backup.' })
       return
     }
     setExporting(true)
     setStatus(null)
     try {
-      const blob = await exportBackup(pinInput)
+      const blob = await exportBackup(backupPassword)
       const date = new Date().toISOString().slice(0, 10)
       downloadBlob(blob, `hanzi-backup-${date}.json`)
       setStatus({ type: 'success', message: 'Backup downloaded. Store it somewhere safe.' })
-      setPinInput('')
+      setBackupPassword('')
     } catch (err) {
       setStatus({ type: 'error', message: 'Export failed: ' + err.message })
     }
@@ -39,20 +39,20 @@ export default function SettingsPage() {
   }
 
   const handleImport = async (file) => {
-    if (pinInput.length < 4) {
-      setStatus({ type: 'error', message: 'Enter the PIN that was used to create the backup.' })
+    if (backupPassword.trim().length < 4) {
+      setStatus({ type: 'error', message: 'Enter the backup password that was used to create the backup.' })
       return
     }
     setImporting(true)
     setStatus(null)
     try {
-      const result = await importBackup(pinInput, file)
+      const result = await importBackup(backupPassword, file)
       if (result.success) {
         setStatus({ type: 'success', message: result.message })
       } else {
         setStatus({ type: 'error', message: result.message })
       }
-      setPinInput('')
+      setBackupPassword('')
     } catch (err) {
       setStatus({ type: 'error', message: 'Import failed: ' + err.message })
     }
@@ -71,34 +71,36 @@ export default function SettingsPage() {
       <div style={{ marginBottom: 20 }}>
         <h2 style={{ fontSize: 22, fontWeight: 700 }}>Settings</h2>
         <p className="text-secondary" style={{ fontSize: 14 }}>
-          Backup, restore, and security
+          Backup, restore, and device security
         </p>
       </div>
 
-      {/* PIN input for backup operations */}
+      {/* Backup password for export/import */}
       <div style={{ marginBottom: 24 }}>
-        <label className="label">Your PIN (required for backup operations)</label>
+        <label className="label">Backup password</label>
         <input
           className="input"
           type="password"
-          inputMode="numeric"
-          pattern="[0-9]*"
-          value={pinInput}
+          value={backupPassword}
           onChange={e => {
-            setPinInput(e.target.value.replace(/\D/g, ''))
+            setBackupPassword(e.target.value)
             setStatus(null)
           }}
-          placeholder="Enter PIN"
-          maxLength={8}
-          style={{ maxWidth: 200 }}
+          placeholder="Enter a backup password"
+          maxLength={128}
+          autoComplete="off"
+          style={{ maxWidth: 280 }}
         />
+        <p className="text-secondary" style={{ fontSize: 13, marginTop: 8, lineHeight: 1.4 }}>
+          This is separate from the device PIN. Use any strong password you can also enter on another device when restoring.
+        </p>
       </div>
 
       {/* Export */}
       <div className="card" style={{ marginBottom: 12 }}>
         <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Export Backup</h3>
         <p className="text-secondary" style={{ fontSize: 13, marginBottom: 12, lineHeight: 1.4 }}>
-          Downloads an AES-256 encrypted file containing all your cards, review history, and writing logs. Only your PIN can decrypt it.
+          Downloads an AES-256 encrypted file containing all your cards, review history, and writing logs. The backup password is not tied to the local device PIN, so the file can be restored on another device.
         </p>
         <button
           className="btn btn-primary btn-sm"
@@ -113,7 +115,7 @@ export default function SettingsPage() {
       <div className="card" style={{ marginBottom: 12 }}>
         <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Restore from Backup</h3>
         <p className="text-secondary" style={{ fontSize: 13, marginBottom: 12, lineHeight: 1.4 }}>
-          Replaces all current data with the backup. Enter the PIN that was used when the backup was created.
+          Replaces all current study data with the backup. Enter the same backup password that was used when the file was created.
         </p>
         <input
           ref={fileInputRef}
@@ -138,8 +140,8 @@ export default function SettingsPage() {
         <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Security Log</h3>
         <p className="text-secondary" style={{ fontSize: 13, marginBottom: 12 }}>
           {failedAttempts.length === 0
-            ? 'No failed PIN attempts recorded.'
-            : `${failedAttempts.length} failed attempt${failedAttempts.length !== 1 ? 's' : ''} total.`}
+            ? 'No failed device PIN attempts recorded.'
+            : `${failedAttempts.length} failed device PIN attempt${failedAttempts.length !== 1 ? 's' : ''} total.`}
         </p>
 
         {failedAttempts.length > 0 && (
