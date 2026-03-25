@@ -22,7 +22,8 @@ export function AuthProvider({ children }) {
 
         if (error || !isAllowed) {
           console.error('Unauthorized account rejected:', error)
-          setAuthError('This account is not authorized for this app.')
+          const reason = error?.message ? ` (${error.message})` : ''
+          setAuthError(`This account is not authorized for this app.${reason}`)
           setSession(null)
           setLoading(false)
           await supabase.auth.signOut()

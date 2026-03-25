@@ -26,6 +26,9 @@ as $$
   );
 $$;
 
+revoke all on function public.is_allowed_user() from public;
+grant execute on function public.is_allowed_user() to authenticated;
+
 create table if not exists public.decks (
   id uuid primary key default gen_random_uuid(),
   owner_id uuid not null references auth.users(id) on delete cascade,
