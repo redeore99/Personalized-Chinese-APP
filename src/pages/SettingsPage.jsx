@@ -4,8 +4,6 @@ import { getLocalDataCounts } from '../lib/db'
 import { useAuth } from '../contexts/AuthContext'
 import { useSync } from '../contexts/SyncContext'
 
-const FAILED_ATTEMPTS_KEY = 'chinestudy_failed_attempts'
-
 function formatTimestamp(value) {
   if (!value) return 'Not yet'
   return new Date(value).toLocaleString()
@@ -29,7 +27,6 @@ export default function SettingsPage({ onRefresh }) {
   const [syncingNow, setSyncingNow] = useState(false)
   const [migratingNow, setMigratingNow] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
-  const [showAttempts, setShowAttempts] = useState(false)
   const [localCounts, setLocalCounts] = useState({
     cards: 0,
     decks: 0,
@@ -38,14 +35,6 @@ export default function SettingsPage({ onRefresh }) {
   })
 
   const fileInputRef = useRef(null)
-
-  const failedAttempts = (() => {
-    try {
-      return JSON.parse(localStorage.getItem(FAILED_ATTEMPTS_KEY) || '[]')
-    } catch {
-      return []
-    }
-  })()
 
   const refreshLocalCounts = async () => {
     const counts = await getLocalDataCounts()
@@ -159,12 +148,6 @@ export default function SettingsPage({ onRefresh }) {
     }
 
     setSigningOut(false)
-  }
-
-  const clearFailedAttempts = () => {
-    localStorage.removeItem(FAILED_ATTEMPTS_KEY)
-    setShowAttempts(false)
-    setStatus({ type: 'success', message: 'Device security log cleared.' })
   }
 
   return (
@@ -286,45 +269,6 @@ export default function SettingsPage({ onRefresh }) {
         >
           {importing ? 'Restoring...' : 'Import Backup File'}
         </button>
-      </div>
-
-      <div className="card" style={{ marginBottom: 12 }}>
-        <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Legacy Device Security Log</h3>
-        <p className="text-secondary" style={{ fontSize: 13, marginBottom: 12 }}>
-          {failedAttempts.length === 0
-            ? 'No failed legacy device PIN attempts recorded.'
-            : `${failedAttempts.length} failed legacy device PIN attempt${failedAttempts.length !== 1 ? 's' : ''} total.`}
-        </p>
-
-        {failedAttempts.length > 0 && (
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button
-              className="btn btn-ghost btn-sm"
-              onClick={() => setShowAttempts(!showAttempts)}
-            >
-              {showAttempts ? 'Hide' : 'View Log'}
-            </button>
-            <button
-              className="btn btn-ghost btn-sm"
-              onClick={clearFailedAttempts}
-              style={{ color: 'var(--error)' }}
-            >
-              Clear Log
-            </button>
-          </div>
-        )}
-
-        {showAttempts && failedAttempts.length > 0 && (
-          <div className="security-alert-log" style={{ marginTop: 12 }}>
-            {failedAttempts.slice().reverse().map((attempt, index) => (
-              <div key={index} className="security-alert-entry">
-                <span className="security-alert-time">
-                  {new Date(attempt.timestamp).toLocaleString()}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
 
       {status && (

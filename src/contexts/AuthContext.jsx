@@ -6,6 +6,7 @@ const AuthContext = createContext(null)
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [authError, setAuthError] = useState('')
 
   useEffect(() => {
     if (!isSupabaseConfigured() || !supabase) {
@@ -15,21 +16,47 @@ export function AuthProvider({ children }) {
 
     let mounted = true
 
-    supabase.auth.getSession().then(({ data, error }) => {
+    const applySession = async nextSession => {
+      if (nextSession) {
+        const { data, error } = await supabase
+          .from('app_config')
+          .select('allowed_email')
+          .maybeSingle()
+
+        if (error || !data?.allowed_email) {
+          console.error('Unauthorized account rejected:', error)
+          setAuthError('This account is not authorized for this app.')
+          setSession(null)
+          setLoading(false)
+          await supabase.auth.signOut()
+          return
+        }
+      }
+
+      if (nextSession && !nextSession.user) {
+        await supabase.auth.signOut()
+        setSession(null)
+        setLoading(false)
+        return
+      }
+
+      setSession(nextSession ?? null)
+      setLoading(false)
+    }
+
+    supabase.auth.getSession().then(async ({ data, error }) => {
       if (!mounted) return
 
       if (error) {
         console.error('Supabase session load failed:', error)
       }
 
-      setSession(data.session ?? null)
-      setLoading(false)
+      await applySession(data.session ?? null)
     })
 
-    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const { data } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
       if (!mounted) return
-      setSession(nextSession)
-      setLoading(false)
+      await applySession(nextSession)
     })
 
     return () => {
@@ -43,21 +70,8 @@ export function AuthProvider({ children }) {
       return { error: new Error('Supabase is not configured.') }
     }
 
-    return supabase.auth.signInWithPassword({ email, password })
-  }
-
-  const signUp = async ({ email, password }) => {
-    if (!supabase) {
-      return { error: new Error('Supabase is not configured.') }
-    }
-
-    return supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: window.location.origin
-      }
-    })
+    setAuthError('')
+    return supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password })
   }
 
   const signOut = async () => {
@@ -74,9 +88,10 @@ export function AuthProvider({ children }) {
         loading,
         session,
         user: session?.user ?? null,
+        authError,
         signInWithPassword,
-        signUp,
         signOut,
+        clearAuthError: () => setAuthError(''),
         isConfigured: isSupabaseConfigured()
       }}
     >

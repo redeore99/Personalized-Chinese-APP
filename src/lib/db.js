@@ -38,6 +38,7 @@ db.version(2).stores({
   decks: '++id, name, createdAt',
   reviewLog: '++id, cardId, reviewedAt, rating, intervalDays',
   writingLog: '++id, cardId, practicedAt, score, strokeCount',
+  // Legacy table kept only so old local IndexedDB upgrades remain compatible.
   security: 'key'
 })
 
@@ -46,6 +47,7 @@ db.version(3).stores({
   decks: '++id, &name, createdAt',
   reviewLog: '++id, cardId, reviewedAt, rating, intervalDays',
   writingLog: '++id, cardId, practicedAt, score, strokeCount',
+  // Legacy table kept only so old local IndexedDB upgrades remain compatible.
   security: 'key'
 })
 
@@ -54,6 +56,7 @@ db.version(4).stores({
   decks: '++id, syncId, name, createdAt, updatedAt, deletedAt, dirty',
   reviewLog: '++id, syncId, cardId, cardSyncId, reviewedAt, updatedAt, dirty',
   writingLog: '++id, syncId, cardId, cardSyncId, practicedAt, updatedAt, dirty',
+  // Legacy table kept only so old local IndexedDB upgrades remain compatible.
   security: 'key',
   meta: 'key'
 }).upgrade(async tx => {
@@ -112,15 +115,6 @@ db.version(4).stores({
     })
   }
 })
-
-export async function setSecurityValue(key, value) {
-  await db.security.put({ key, value, updatedAt: nowIso() })
-}
-
-export async function getSecurityValue(key) {
-  const entry = await db.security.get(key)
-  return entry ? entry.value : null
-}
 
 export async function setMetaValue(key, value) {
   await db.meta.put({ key, value, updatedAt: nowIso() })

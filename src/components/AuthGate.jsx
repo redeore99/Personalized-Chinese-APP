@@ -15,7 +15,7 @@ function AuthSetupScreen() {
         <div className="auth-setup-list">
           <div className="auth-setup-item">1. Copy `.env.example` to `.env.local`.</div>
           <div className="auth-setup-item">2. Fill `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.</div>
-          <div className="auth-setup-item">3. Run the SQL schema and enable email/password auth.</div>
+          <div className="auth-setup-item">3. Run the SQL schema and create only your account in Supabase Auth.</div>
         </div>
       </div>
     </div>
@@ -23,13 +23,10 @@ function AuthSetupScreen() {
 }
 
 export default function AuthGate({ children }) {
-  const { loading, session, signInWithPassword, signUp, isConfigured } = useAuth()
-  const [mode, setMode] = useState('signin')
+  const { loading, session, signInWithPassword, isConfigured, authError, clearAuthError } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
-  const [notice, setNotice] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
   if (!isConfigured) {
@@ -55,7 +52,7 @@ export default function AuthGate({ children }) {
   const handleSubmit = async event => {
     event.preventDefault()
     setError('')
-    setNotice('')
+    clearAuthError()
 
     const trimmedEmail = email.trim()
     if (!trimmedEmail || !password) {
@@ -63,32 +60,14 @@ export default function AuthGate({ children }) {
       return
     }
 
-    if (mode === 'signup') {
-      if (password.length < 8) {
-        setError('Use at least 8 characters for your password.')
-        return
-      }
-
-      if (password !== confirmPassword) {
-        setError('Passwords do not match.')
-        return
-      }
-    }
-
     setSubmitting(true)
 
-    const result = mode === 'signin'
-      ? await signInWithPassword({ email: trimmedEmail, password })
-      : await signUp({ email: trimmedEmail, password })
+    const result = await signInWithPassword({ email: trimmedEmail, password })
 
     if (result.error) {
       setError(result.error.message)
       setSubmitting(false)
       return
-    }
-
-    if (mode === 'signup' && !result.data.session) {
-      setNotice('Account created. Check your email to confirm the sign-up, then sign in here.')
     }
 
     setSubmitting(false)
@@ -100,34 +79,9 @@ export default function AuthGate({ children }) {
         <div className="auth-badge">Chinese Study Sync</div>
         <h1 className="auth-title">Sign in to your study account</h1>
         <p className="auth-subtitle">
-          Your cards, reviews, and writing history now sync through your account
-          instead of living only in this browser.
+          Only your manually created account is allowed to use this app.
+          Sign in to access your synced cards, reviews, and writing history.
         </p>
-
-        <div className="auth-tabs">
-          <button
-            className={`auth-tab ${mode === 'signin' ? 'active' : ''}`}
-            type="button"
-            onClick={() => {
-              setMode('signin')
-              setError('')
-              setNotice('')
-            }}
-          >
-            Sign In
-          </button>
-          <button
-            className={`auth-tab ${mode === 'signup' ? 'active' : ''}`}
-            type="button"
-            onClick={() => {
-              setMode('signup')
-              setError('')
-              setNotice('')
-            }}
-          >
-            Create Account
-          </button>
-        </div>
 
         <form onSubmit={handleSubmit} className="auth-form">
           <div>
@@ -138,7 +92,7 @@ export default function AuthGate({ children }) {
               autoComplete="email"
               value={email}
               onChange={event => setEmail(event.target.value)}
-              placeholder="you@example.com"
+              placeholder="your-email@example.com"
             />
           </div>
 
@@ -147,39 +101,19 @@ export default function AuthGate({ children }) {
             <input
               className="input"
               type="password"
-              autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
+              autoComplete="current-password"
               value={password}
               onChange={event => setPassword(event.target.value)}
-              placeholder={mode === 'signin' ? 'Enter your password' : 'Create a strong password'}
+              placeholder="Enter your password"
             />
           </div>
 
-          {mode === 'signup' && (
-            <div>
-              <label className="label">Confirm Password</label>
-              <input
-                className="input"
-                type="password"
-                autoComplete="new-password"
-                value={confirmPassword}
-                onChange={event => setConfirmPassword(event.target.value)}
-                placeholder="Repeat your password"
-              />
-            </div>
-          )}
-
-          {error && (
-            <div className="auth-message auth-message-error">{error}</div>
-          )}
-
-          {notice && (
-            <div className="auth-message auth-message-success">{notice}</div>
+          {(authError || error) && (
+            <div className="auth-message auth-message-error">{authError || error}</div>
           )}
 
           <button className="btn btn-primary btn-block" type="submit" disabled={submitting}>
-            {submitting
-              ? (mode === 'signin' ? 'Signing in...' : 'Creating account...')
-              : (mode === 'signin' ? 'Sign In' : 'Create Account')}
+            {submitting ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
       </div>

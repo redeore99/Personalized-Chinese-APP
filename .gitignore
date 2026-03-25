@@ -5,9 +5,8 @@ node_modules/
 dist/
 
 # Environment
-.env
-.env.local
-.env.*.local
+.env*
+!.env.example
 
 # IDE
 .vscode/
@@ -30,3 +29,5 @@ npm-debug.log*
 *.pem
 *.key
 _push_*.html
+SETUP.local.md
+supabase/*.local.sql
