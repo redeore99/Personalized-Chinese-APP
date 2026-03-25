@@ -18,14 +18,12 @@ export function AuthProvider({ children }) {
 
     const applySession = async nextSession => {
       if (nextSession) {
-        const { data, error } = await supabase
-          .from('app_config')
-          .select('allowed_email')
-          .maybeSingle()
+        const { data: isAllowed, error } = await supabase.rpc('is_allowed_user')
 
-        if (error || !data?.allowed_email) {
+        if (error || !isAllowed) {
           console.error('Unauthorized account rejected:', error)
-          setAuthError('This account is not authorized for this app.')
+          const reason = error?.message ? ` (${error.message})` : ''
+          setAuthError(`This account is not authorized for this app.${reason}`)
           setSession(null)
           setLoading(false)
           await supabase.auth.signOut()
