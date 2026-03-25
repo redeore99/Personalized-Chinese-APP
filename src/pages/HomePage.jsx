@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getStats, db } from '../lib/db'
+import { getTodayReviewCount } from '../lib/db'
 
 export default function HomePage({ stats, onRefresh }) {
   const navigate = useNavigate()
@@ -8,16 +8,8 @@ export default function HomePage({ stats, onRefresh }) {
 
   useEffect(() => {
     onRefresh()
-
-    // Count today's reviews
-    const todayStart = new Date()
-    todayStart.setHours(0, 0, 0, 0)
-    db.reviewLog
-      .where('reviewedAt')
-      .aboveOrEqual(todayStart.toISOString())
-      .count()
-      .then(setRecentReviews)
-  }, [])
+    getTodayReviewCount().then(setRecentReviews)
+  }, [onRefresh])
 
   return (
     <div className="page">

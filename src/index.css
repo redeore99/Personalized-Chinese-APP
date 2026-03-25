@@ -648,6 +648,123 @@ textarea.input {
   stroke-dasharray: 4 4;
 }
 
+/* ---- Account Auth ---- */
+.auth-screen {
+  min-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  background:
+    radial-gradient(circle at top, rgba(220, 38, 38, 0.16), transparent 38%),
+    linear-gradient(180deg, #08101d 0%, var(--bg-primary) 45%, #060b14 100%);
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 420px;
+  padding: 24px;
+  border-radius: 20px;
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  box-shadow: 0 24px 60px rgba(2, 6, 23, 0.45);
+  backdrop-filter: blur(10px);
+}
+
+.auth-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(220, 38, 38, 0.14);
+  color: #fca5a5;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 14px;
+}
+
+.auth-title {
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.15;
+  margin-bottom: 10px;
+}
+
+.auth-subtitle {
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.6;
+  margin-bottom: 20px;
+}
+
+.auth-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  padding: 6px;
+  border-radius: 14px;
+  background: rgba(51, 65, 85, 0.45);
+  margin-bottom: 18px;
+}
+
+.auth-tab {
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 700;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.auth-tab.active {
+  background: rgba(220, 38, 38, 0.18);
+  color: white;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.auth-message {
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.auth-message-error {
+  background: rgba(239, 68, 68, 0.14);
+  color: #fca5a5;
+}
+
+.auth-message-success {
+  background: rgba(34, 197, 94, 0.14);
+  color: #86efac;
+}
+
+.auth-setup-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.auth-setup-item {
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: rgba(51, 65, 85, 0.34);
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
 /* ---- PIN Lock Screen ---- */
 .pin-lock-screen {
   position: fixed;

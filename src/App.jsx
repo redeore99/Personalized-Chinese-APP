@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { HashRouter, Routes, Route, NavLink } from 'react-router-dom'
 import HomePage from './pages/HomePage'
 import ReviewPage from './pages/ReviewPage'
@@ -6,7 +6,7 @@ import WritePage from './pages/WritePage'
 import AddCardPage from './pages/AddCardPage'
 import DecksPage from './pages/DecksPage'
 import SettingsPage from './pages/SettingsPage'
-import PinLock from './components/PinLock'
+import AuthGate from './components/AuthGate'
 import { getStats } from './lib/db'
 
 // SVG Icons as components
@@ -49,75 +49,75 @@ const SettingsIcon = () => (
 function App() {
   const [stats, setStats] = useState({ dueCount: 0 })
 
-  const refreshStats = () => {
+  const refreshStats = useCallback(() => {
     getStats().then(setStats)
-  }
+  }, [])
 
   useEffect(() => {
     refreshStats()
     // Refresh stats every 30 seconds
     const interval = setInterval(refreshStats, 30000)
     return () => clearInterval(interval)
-  }, [])
+  }, [refreshStats])
 
   return (
-    <PinLock>
-    <HashRouter>
-      <Routes>
-        <Route path="/" element={<HomePage stats={stats} onRefresh={refreshStats} />} />
-        <Route path="/review" element={<ReviewPage onRefresh={refreshStats} />} />
-        <Route path="/write" element={<WritePage onRefresh={refreshStats} />} />
-        <Route path="/add" element={<AddCardPage onRefresh={refreshStats} />} />
-        <Route path="/decks" element={<DecksPage onRefresh={refreshStats} />} />
-        <Route path="/settings" element={<SettingsPage />} />
-      </Routes>
+    <AuthGate>
+      <HashRouter>
+        <Routes>
+          <Route path="/" element={<HomePage stats={stats} onRefresh={refreshStats} />} />
+          <Route path="/review" element={<ReviewPage onRefresh={refreshStats} />} />
+          <Route path="/write" element={<WritePage onRefresh={refreshStats} />} />
+          <Route path="/add" element={<AddCardPage onRefresh={refreshStats} />} />
+          <Route path="/decks" element={<DecksPage onRefresh={refreshStats} />} />
+          <Route path="/settings" element={<SettingsPage onRefresh={refreshStats} />} />
+        </Routes>
 
-      <nav className="bottom-nav">
-        <NavLink to="/" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} end>
-          <HomeIcon />
-          <span>Home</span>
-        </NavLink>
-        <NavLink to="/review" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-          <CardsIcon />
-          <span style={{ position: 'relative' }}>
-            Review
-            {stats.dueCount > 0 && (
-              <span style={{
-                position: 'absolute',
-                top: -14,
-                right: -16,
-                background: 'var(--accent)',
-                color: 'white',
-                fontSize: 10,
-                fontWeight: 700,
-                minWidth: 18,
-                height: 18,
-                borderRadius: 9,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: '0 5px'
-              }}>
-                {stats.dueCount > 99 ? '99+' : stats.dueCount}
-              </span>
-            )}
-          </span>
-        </NavLink>
-        <NavLink to="/write" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-          <WriteIcon />
-          <span>Write</span>
-        </NavLink>
-        <NavLink to="/decks" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-          <DecksIcon />
-          <span>Decks</span>
-        </NavLink>
-        <NavLink to="/settings" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-          <SettingsIcon />
-          <span>Settings</span>
-        </NavLink>
-      </nav>
-    </HashRouter>
-    </PinLock>
+        <nav className="bottom-nav">
+          <NavLink to="/" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} end>
+            <HomeIcon />
+            <span>Home</span>
+          </NavLink>
+          <NavLink to="/review" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+            <CardsIcon />
+            <span style={{ position: 'relative' }}>
+              Review
+              {stats.dueCount > 0 && (
+                <span style={{
+                  position: 'absolute',
+                  top: -14,
+                  right: -16,
+                  background: 'var(--accent)',
+                  color: 'white',
+                  fontSize: 10,
+                  fontWeight: 700,
+                  minWidth: 18,
+                  height: 18,
+                  borderRadius: 9,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '0 5px'
+                }}>
+                  {stats.dueCount > 99 ? '99+' : stats.dueCount}
+                </span>
+              )}
+            </span>
+          </NavLink>
+          <NavLink to="/write" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+            <WriteIcon />
+            <span>Write</span>
+          </NavLink>
+          <NavLink to="/decks" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+            <DecksIcon />
+            <span>Decks</span>
+          </NavLink>
+          <NavLink to="/settings" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+            <SettingsIcon />
+            <span>Settings</span>
+          </NavLink>
+        </nav>
+      </HashRouter>
+    </AuthGate>
   )
 }
 

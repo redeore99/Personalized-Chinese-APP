@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { addCard, db } from '../lib/db'
+import { addCard, getRecentCards } from '../lib/db'
 
 export default function AddCardPage({ onRefresh }) {
   const navigate = useNavigate()
@@ -18,8 +18,7 @@ export default function AddCardPage({ onRefresh }) {
   // Focus character input on mount
   useEffect(() => {
     charInputRef.current?.focus()
-    // Load recent cards
-    db.cards.orderBy('createdAt').reverse().limit(10).toArray().then(setRecentCards)
+    getRecentCards(10).then(setRecentCards)
   }, [])
 
   const handleAddExample = () => {
