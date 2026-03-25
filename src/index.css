@@ -357,7 +357,268 @@ textarea.input {
   font-size: 48px;
 }
 
-/* ---- Writing canvas ---- */
+/* ---- Writing Page ---- */
+.write-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-bottom: calc(var(--nav-height) + 16px + var(--safe-bottom));
+}
+
+/* Progress bar */
+.write-progress-bar {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  position: relative;
+}
+
+.write-progress-fill {
+  flex: 1;
+  height: 3px;
+  background: var(--bg-elevated);
+  border-radius: 2px;
+  overflow: hidden;
+  position: relative;
+}
+
+.write-progress-fill::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: var(--progress, 0%);
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.write-progress-text {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+/* Prompt area */
+.write-prompt {
+  text-align: center;
+  margin-bottom: 12px;
+}
+
+.write-prompt-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.write-prompt-pinyin {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 2px;
+}
+
+.write-prompt-meaning {
+  font-size: 15px;
+  color: var(--text-secondary);
+}
+
+/* Character slots for multi-char words */
+.write-char-slots {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-bottom: 14px;
+}
+
+.write-char-slot {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--border);
+  background: var(--bg-secondary);
+  transition: all 0.3s ease;
+}
+
+.write-char-slot.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  transform: scale(1.1);
+}
+
+.write-char-slot.done {
+  border-color: var(--success);
+  background: rgba(34, 197, 94, 0.12);
+}
+
+.write-char-slot.flash {
+  animation: charFlash 0.5s ease;
+}
+
+@keyframes charFlash {
+  0% { transform: scale(1.1); }
+  50% { transform: scale(1.25); background: rgba(34, 197, 94, 0.3); }
+  100% { transform: scale(1); }
+}
+
+.write-char-slot-char {
+  font-family: var(--font-chinese);
+  font-size: 22px;
+  color: var(--success);
+}
+
+.write-char-slot-active {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.write-char-slot-pending {
+  font-size: 20px;
+  color: var(--text-muted);
+}
+
+/* Canvas wrapper */
+.write-canvas-wrap {
+  width: 100%;
+  max-width: 300px;
+  margin-bottom: 12px;
+}
+
+.write-canvas-outer {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  max-width: 280px;
+  margin: 0 auto;
+  background: var(--bg-elevated);
+  border-radius: 16px;
+  border: 2px solid var(--border);
+  overflow: hidden;
+  touch-action: none;
+}
+
+.write-canvas-outer svg {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.write-canvas-inner {
+  position: relative;
+  z-index: 1;
+}
+
+/* Grid lines */
+.write-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.write-grid line {
+  stroke: var(--border);
+  stroke-width: 0.8;
+  stroke-dasharray: 6 4;
+  opacity: 0.6;
+}
+
+/* Stroke counter */
+.write-stroke-counter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 0 4px;
+}
+
+.write-stroke-counter-bar {
+  flex: 1;
+  height: 3px;
+  background: var(--bg-elevated);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.write-stroke-counter-fill {
+  height: 100%;
+  background: var(--success);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.write-stroke-counter-text {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.write-stroke-mistakes {
+  color: var(--warning);
+  font-size: 11px;
+}
+
+/* Controls */
+.write-controls {
+  width: 100%;
+  max-width: 320px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.write-controls-row {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  align-items: center;
+}
+
+/* Result */
+.write-result {
+  width: 100%;
+  text-align: center;
+}
+
+.write-result-header {
+  margin-bottom: 10px;
+}
+
+.write-result-score {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.write-result-score.perfect { color: var(--success); }
+.write-result-score.good { color: var(--warning); }
+.write-result-score.poor { color: var(--error); }
+
+.write-result-mistakes {
+  display: block;
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.write-srs-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Legacy — keep for backward compat if any ref */
 .writing-canvas-container {
   position: relative;
   width: 100%;
@@ -375,7 +636,6 @@ textarea.input {
   height: 100% !important;
 }
 
-/* Grid lines for writing */
 .writing-grid {
   position: absolute;
   inset: 0;

@@ -22,6 +22,14 @@ db.version(2).stores({
   security: 'key'
 })
 
+db.version(3).stores({
+  cards: '++id, character, pinyin, deckId, nextReview, *tags',
+  decks: '++id, &name, createdAt',
+  reviewLog: '++id, cardId, reviewedAt, rating, intervalDays',
+  writingLog: '++id, cardId, practicedAt, score, strokeCount',
+  security: 'key'
+})
+
 // Store a security value in IndexedDB (tamper-resistant)
 export async function setSecurityValue(key, value) {
   await db.security.put({ key, value, updatedAt: new Date().toISOString() })
@@ -133,6 +141,58 @@ export async function logWriting(cardId, score, strokeCount) {
     score,
     strokeCount
   })
+}
+
+// Create a deck
+export async function createDeck(name) {
+  const id = await db.decks.add({ name, createdAt: new Date().toISOString() })
+  return id
+}
+
+// Get all decks with card counts
+export async function getDecksWithCounts() {
+  const decks = await db.decks.toArray()
+  const cards = await db.cards.toArray()
+  return decks.map(deck => ({
+    ...deck,
+    cardCount: cards.filter(c => c.deckId === deck.id).length
+  }))
+}
+
+// Bulk import cards into a deck (batch for performance)
+export async function bulkImportCards(deckId, wordsArray, tags = []) {
+  const now = new Date().toISOString()
+  const cards = wordsArray.map(word => ({
+    character: word.character,
+    pinyin: word.pinyin || '',
+    meaning: word.meaning || '',
+    examples: word.examples || [],
+    deckId,
+    tags,
+    notes: '',
+    interval: 0,
+    repetitions: 0,
+    easeFactor: 2.5,
+    nextReview: now,
+    lastReview: null,
+    writingScore: null,
+    writingCount: 0,
+    createdAt: now,
+    suspended: false
+  }))
+
+  // Batch in chunks of 100 for performance
+  const BATCH_SIZE = 100
+  for (let i = 0; i < cards.length; i += BATCH_SIZE) {
+    await db.cards.bulkAdd(cards.slice(i, i + BATCH_SIZE))
+  }
+
+  return cards.length
+}
+
+// Check if a deck with a given name already exists
+export async function getDeckByName(name) {
+  return db.decks.where('name').equals(name).first()
 }
 
 // Get stats

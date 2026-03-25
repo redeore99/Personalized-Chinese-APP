@@ -4,6 +4,7 @@ import HomePage from './pages/HomePage'
 import ReviewPage from './pages/ReviewPage'
 import WritePage from './pages/WritePage'
 import AddCardPage from './pages/AddCardPage'
+import DecksPage from './pages/DecksPage'
 import SettingsPage from './pages/SettingsPage'
 import PinLock from './components/PinLock'
 import { getStats } from './lib/db'
@@ -30,11 +31,11 @@ const WriteIcon = () => (
   </svg>
 )
 
-const AddIcon = () => (
+const DecksIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="10"/>
-    <path d="M12 8v8"/>
-    <path d="M8 12h8"/>
+    <rect x="4" y="2" width="16" height="6" rx="1"/>
+    <rect x="2" y="10" width="20" height="6" rx="1"/>
+    <rect x="4" y="18" width="16" height="4" rx="1"/>
   </svg>
 )
 
@@ -67,6 +68,7 @@ function App() {
         <Route path="/review" element={<ReviewPage onRefresh={refreshStats} />} />
         <Route path="/write" element={<WritePage onRefresh={refreshStats} />} />
         <Route path="/add" element={<AddCardPage onRefresh={refreshStats} />} />
+        <Route path="/decks" element={<DecksPage onRefresh={refreshStats} />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Routes>
 
@@ -105,9 +107,9 @@ function App() {
           <WriteIcon />
           <span>Write</span>
         </NavLink>
-        <NavLink to="/add" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-          <AddIcon />
-          <span>Add</span>
+        <NavLink to="/decks" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+          <DecksIcon />
+          <span>Decks</span>
         </NavLink>
         <NavLink to="/settings" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
           <SettingsIcon />
