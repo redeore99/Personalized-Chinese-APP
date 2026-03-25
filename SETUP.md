@@ -70,14 +70,14 @@ If you want to keep your email out of the public repo, use `SETUP.local.md` and
 
 After this, only your account should exist for this app.
 
-## Step 5: Find Your Supabase Project URL and Anon Key
+## Step 5: Find Your Supabase Project URL and Client Key
 
 1. In Supabase, open your project.
 2. Open the `Connect` dialog or project API settings.
 3. Copy:
 
 - Project URL
-- Anon key or publishable client key
+- Publishable key
 
 Do not use the `service_role` key in this app.
 
@@ -93,7 +93,7 @@ It should look like this:
 
 ```env
 VITE_SUPABASE_URL=https://your-project-id.supabase.co
-VITE_SUPABASE_ANON_KEY=your-anon-key
+VITE_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
 ```
 
 Replace the first two values with the real values from Supabase.
@@ -161,7 +161,7 @@ git push
 6. Before deploying, add these environment variables in the Vercel project settings:
 
 - `VITE_SUPABASE_URL`
-- `VITE_SUPABASE_ANON_KEY`
+- `VITE_SUPABASE_PUBLISHABLE_KEY`
 
 Use the same values as your local `.env.local`.
 

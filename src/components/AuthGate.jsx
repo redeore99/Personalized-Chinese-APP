@@ -9,12 +9,12 @@ function AuthSetupScreen() {
         <h1 className="auth-title">Connect Supabase</h1>
         <p className="auth-subtitle">
           Accounts and sync are now the entry point to the app. Add your Supabase
-          URL and anon key in `.env.local`, then apply the SQL in `supabase/schema.sql`.
+          URL and publishable key in `.env.local`, then apply the SQL in `supabase/schema.sql`.
         </p>
 
         <div className="auth-setup-list">
           <div className="auth-setup-item">1. Copy `.env.example` to `.env.local`.</div>
-          <div className="auth-setup-item">2. Fill `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.</div>
+          <div className="auth-setup-item">2. Fill `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`.</div>
           <div className="auth-setup-item">3. Run the SQL schema and create only your account in Supabase Auth.</div>
         </div>
       </div>
