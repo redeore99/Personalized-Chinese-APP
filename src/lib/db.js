@@ -13,6 +13,26 @@ db.version(1).stores({
   writingLog: '++id, cardId, practicedAt, score, strokeCount'
 })
 
+db.version(2).stores({
+  cards: '++id, character, pinyin, deckId, nextReview, *tags',
+  decks: '++id, name, createdAt',
+  reviewLog: '++id, cardId, reviewedAt, rating, intervalDays',
+  writingLog: '++id, cardId, practicedAt, score, strokeCount',
+  // Security: tamper-proof storage for PIN hash (redundant copy of localStorage)
+  security: 'key'
+})
+
+// Store a security value in IndexedDB (tamper-resistant)
+export async function setSecurityValue(key, value) {
+  await db.security.put({ key, value, updatedAt: new Date().toISOString() })
+}
+
+// Retrieve a security value from IndexedDB
+export async function getSecurityValue(key) {
+  const entry = await db.security.get(key)
+  return entry ? entry.value : null
+}
+
 // Default SRS fields for a new card
 export function createCard({
   character,

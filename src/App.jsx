@@ -4,6 +4,7 @@ import HomePage from './pages/HomePage'
 import ReviewPage from './pages/ReviewPage'
 import WritePage from './pages/WritePage'
 import AddCardPage from './pages/AddCardPage'
+import SettingsPage from './pages/SettingsPage'
 import PinLock from './components/PinLock'
 import { getStats } from './lib/db'
 
@@ -37,6 +38,13 @@ const AddIcon = () => (
   </svg>
 )
 
+const SettingsIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="3"/>
+    <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
+  </svg>
+)
+
 function App() {
   const [stats, setStats] = useState({ dueCount: 0 })
 
@@ -59,6 +67,7 @@ function App() {
         <Route path="/review" element={<ReviewPage onRefresh={refreshStats} />} />
         <Route path="/write" element={<WritePage onRefresh={refreshStats} />} />
         <Route path="/add" element={<AddCardPage onRefresh={refreshStats} />} />
+        <Route path="/settings" element={<SettingsPage />} />
       </Routes>
 
       <nav className="bottom-nav">
@@ -99,6 +108,10 @@ function App() {
         <NavLink to="/add" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
           <AddIcon />
           <span>Add</span>
+        </NavLink>
+        <NavLink to="/settings" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+          <SettingsIcon />
+          <span>Settings</span>
         </NavLink>
       </nav>
     </HashRouter>

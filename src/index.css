@@ -256,7 +256,7 @@ textarea.input {
   background: var(--bg-secondary);
   border-top: 1px solid var(--border);
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   z-index: 100;
 }
 
@@ -476,4 +476,40 @@ textarea.input {
   font-size: 13px;
   font-weight: 500;
   margin-top: 8px;
+}
+
+.lockout-timer {
+  font-size: 36px;
+  font-weight: 700;
+  color: var(--error);
+  font-variant-numeric: tabular-nums;
+  margin: 8px 0;
+}
+
+/* ---- Security Alert ---- */
+.security-alert-log {
+  width: 100%;
+  max-width: 300px;
+  max-height: 180px;
+  overflow-y: auto;
+  background: var(--bg-elevated);
+  border-radius: 12px;
+  padding: 12px;
+  margin-top: 16px;
+}
+
+.security-alert-entry {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.security-alert-entry:last-child {
+  border-bottom: none;
+}
+
+.security-alert-time {
+  color: var(--error);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
 }
