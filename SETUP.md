@@ -82,11 +82,15 @@ These external systems matter after code changes:
   Check the Vercel env vars and redeploy.
 - Login works in Supabase but not in the app
   Check that the allowed email in the SQL schema matches the manually created user.
+<<<<<<< ours
 <<<<<<< codex/troubleshoot-login-issue
   If it still fails, rerun the latest `supabase/schema.sql` so `public.is_allowed_user()` and its execute grant for `authenticated` are recreated.
 =======
   If it still fails, rerun the latest `supabase/schema.sql` so `public.is_allowed_user()` is recreated with the current auth check logic.
 >>>>>>> main
+=======
+  If it still fails, rerun the latest `supabase/schema.sql` so `public.is_allowed_user()` and its execute grant for `authenticated` are recreated.
+>>>>>>> theirs
 - Cloud sync is missing old cards
   Open the old device or browser, sign in there, and run `Upload Local Data to Cloud`.
 - Repo changes are live in GitHub but not in production
