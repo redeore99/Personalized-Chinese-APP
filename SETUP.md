@@ -83,11 +83,19 @@ These external systems matter after code changes:
 - Login works in Supabase but not in the app
   Check that the allowed email in the SQL schema matches the manually created user.
 <<<<<<< ours
+<<<<<<< ours
+<<<<<<< ours
 <<<<<<< codex/troubleshoot-login-issue
   If it still fails, rerun the latest `supabase/schema.sql` so `public.is_allowed_user()` and its execute grant for `authenticated` are recreated.
 =======
   If it still fails, rerun the latest `supabase/schema.sql` so `public.is_allowed_user()` is recreated with the current auth check logic.
 >>>>>>> main
+=======
+  If it still fails, rerun the latest `supabase/schema.sql` so `public.is_allowed_user()` and its execute grant for `authenticated` are recreated.
+>>>>>>> theirs
+=======
+  If it still fails, rerun the latest `supabase/schema.sql` so `public.is_allowed_user()` and its execute grant for `authenticated` are recreated.
+>>>>>>> theirs
 =======
   If it still fails, rerun the latest `supabase/schema.sql` so `public.is_allowed_user()` and its execute grant for `authenticated` are recreated.
 >>>>>>> theirs
