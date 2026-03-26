@@ -152,7 +152,14 @@ export default function CardsPage({ onRefresh }) {
 
     setSaving(true)
     setMessage('')
-    await deleteCard(selectedCardId)
+    const deletedCount = await deleteCard(selectedCardId)
+
+    if (!deletedCount) {
+      setSaving(false)
+      setMessage('Could not delete this card locally. Refresh the page and try again.')
+      return
+    }
+
     await loadCards()
     onRefresh()
     setMessage('Card deleted.')

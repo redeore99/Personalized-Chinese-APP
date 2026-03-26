@@ -440,12 +440,14 @@ export async function getRecentCards(limit = 10) {
 }
 
 export async function getCard(id) {
-  const card = await db.cards.get(id)
+  const normalizedId = Number.isFinite(Number(id)) ? Number(id) : id
+  const card = await db.cards.get(normalizedId)
   return isActiveRecord(card) ? card : null
 }
 
 export async function updateCard(id, changes) {
-  const existing = await db.cards.get(id)
+  const normalizedId = Number.isFinite(Number(id)) ? Number(id) : id
+  const existing = await db.cards.get(normalizedId)
   if (!existing) return 0
 
   let deckSyncId = existing.deckSyncId || null
@@ -458,7 +460,7 @@ export async function updateCard(id, changes) {
     }
   }
 
-  return db.cards.update(id, {
+  return db.cards.update(normalizedId, {
     ...changes,
     deckSyncId,
     updatedAt: nowIso(),
@@ -467,11 +469,20 @@ export async function updateCard(id, changes) {
 }
 
 export async function deleteCard(id) {
-  return db.cards.update(id, {
-    deletedAt: nowIso(),
-    updatedAt: nowIso(),
+  const normalizedId = Number.isFinite(Number(id)) ? Number(id) : id
+  const existing = await db.cards.get(normalizedId)
+  if (!existing) return 0
+
+  const deletedAt = nowIso()
+
+  await db.cards.put({
+    ...existing,
+    deletedAt,
+    updatedAt: deletedAt,
     dirty: true
-  })
+  }, normalizedId)
+
+  return 1
 }
 
 export async function logReview(cardId, rating, intervalDays) {

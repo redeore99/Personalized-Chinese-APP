@@ -103,6 +103,9 @@ These external systems matter after code changes:
   Update both devices to the latest build and run `Sync Now` on each.
   Also rerun the latest SQL in Supabase SQL Editor.
   The current sync logic treats deletions as tombstones, and the latest schema also protects newer tombstones server-side so a stale undeleted copy should no longer recreate the card.
+- Delete says it worked, but the card is still visible on the same device
+  Update to the latest build and try again from `Cards`.
+  The current app now verifies that the local Dexie delete tombstone was actually written before reporting success.
 - Deck organization looks different across devices
   Rerun the latest `supabase/schema.local.sql` or `supabase/schema.sql` in Supabase SQL Editor.
   The current app can still sync with the legacy deck shape, but the richer deck metadata only syncs completely after those columns exist in Supabase.
