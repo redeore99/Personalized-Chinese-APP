@@ -59,7 +59,7 @@ The old local PIN lock system has been removed. Do not describe it as the curren
 - `src/pages/SettingsPage.jsx`
   Shows account status, sync actions, backup export/import, and local data counts.
 - `supabase/schema.sql`
-  Public generic SQL schema with placeholder email, owner-scoped sync tables, and deck metadata columns.
+  Public generic SQL schema with placeholder email, owner-scoped sync tables, deck metadata columns, and server-side sync guards that protect newer tombstones and newer `updated_at` values.
 - `supabase/schema.local.sql`
   Local-only, gitignored SQL schema containing the real allowed email and mirroring the current public schema.
 - `SETUP.md`

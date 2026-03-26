@@ -41,7 +41,7 @@ VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
 11. Save the Vercel env vars and redeploy.
 12. Open the deployed app and sign in with the manually created account.
 13. On each older browser that already has local study data, sign in there too and run `Sync Now`. The latest app will automatically do a deeper full-library reconcile if local and cloud counts still disagree.
-14. If you deploy the latest library-management update, rerun the latest schema SQL in Supabase so the new deck metadata columns (`slug`, `description`, `kind`, `source_key`, `color`, `sort_order`) exist before you rely on cross-device deck organization.
+14. If you deploy the latest library-management and sync-hardening update, rerun the latest schema SQL in Supabase so the new deck metadata columns (`slug`, `description`, `kind`, `source_key`, `color`, `sort_order`) and the server-side sync-protection triggers are applied before you rely on cross-device organization and deletion sync.
 
 ## Optional Local Development
 Local development is not required just to use the deployed app, but it is useful when making or testing code changes.
@@ -101,7 +101,8 @@ These external systems matter after code changes:
   If counts still do not converge after a second `Sync Now`, refresh the app once and sync again.
 - A deleted card comes back after syncing another device
   Update both devices to the latest build and run `Sync Now` on each.
-  The current sync logic treats deletions as tombstones so a stale undeleted copy should no longer recreate the card.
+  Also rerun the latest SQL in Supabase SQL Editor.
+  The current sync logic treats deletions as tombstones, and the latest schema also protects newer tombstones server-side so a stale undeleted copy should no longer recreate the card.
 - Deck organization looks different across devices
   Rerun the latest `supabase/schema.local.sql` or `supabase/schema.sql` in Supabase SQL Editor.
   The current app can still sync with the legacy deck shape, but the richer deck metadata only syncs completely after those columns exist in Supabase.

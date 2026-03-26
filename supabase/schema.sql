@@ -29,6 +29,27 @@ $$;
 revoke all on function public.is_allowed_user() from public;
 grant execute on function public.is_allowed_user() to authenticated;
 
+create or replace function public.protect_sync_row()
+returns trigger
+language plpgsql
+as $$
+begin
+  if old.deleted_at is not null and new.deleted_at is null then
+    return old;
+  end if;
+
+  if new.updated_at is null then
+    new.updated_at := now();
+  end if;
+
+  if old.updated_at is not null and new.updated_at < old.updated_at then
+    return old;
+  end if;
+
+  return new;
+end;
+$$;
+
 create table if not exists public.decks (
   id uuid primary key default gen_random_uuid(),
   owner_id uuid not null references auth.users(id) on delete cascade,
@@ -59,6 +80,12 @@ alter table public.decks
 
 create index if not exists decks_owner_id_slug_idx on public.decks (owner_id, slug);
 create index if not exists decks_owner_id_kind_idx on public.decks (owner_id, kind);
+
+drop trigger if exists decks_protect_sync_row on public.decks;
+create trigger decks_protect_sync_row
+before update on public.decks
+for each row
+execute function public.protect_sync_row();
 
 update public.decks
 set
@@ -118,6 +145,12 @@ create table if not exists public.cards (
     references public.decks (owner_id, id)
     on delete set null
 );
+
+drop trigger if exists cards_protect_sync_row on public.cards;
+create trigger cards_protect_sync_row
+before update on public.cards
+for each row
+execute function public.protect_sync_row();
 
 create table if not exists public.review_logs (
   id uuid primary key default gen_random_uuid(),
