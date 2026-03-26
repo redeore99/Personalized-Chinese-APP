@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import HanziWriter from 'hanzi-writer'
+import PlecoLookupButton from '../components/PlecoLookupButton'
 import { getDueCards, getAllCards, updateCard, logWriting } from '../lib/db'
 import { calculateNextReview } from '../lib/srs'
 
@@ -339,6 +340,7 @@ export default function WritePage({ onRefresh }) {
         <div className="write-prompt-label">Write this word</div>
         <div className="write-prompt-pinyin">{currentCard.pinyin}</div>
         <div className="write-prompt-meaning">{currentCard.meaning}</div>
+        <PlecoLookupButton character={currentCard.character} pinyin={currentCard.pinyin} />
       </div>
 
       {/* Character slots — shows which character you're on */}

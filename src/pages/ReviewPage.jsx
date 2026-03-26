@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
+import PlecoLookupButton from '../components/PlecoLookupButton'
 import { getDueCards, getNewCards, updateCard, logReview } from '../lib/db'
 import { calculateNextReview, previewIntervals, formatInterval } from '../lib/srs'
 
@@ -177,6 +178,11 @@ export default function ReviewPage({ onRefresh }) {
             <div style={{ fontSize: 20, color: 'var(--text-primary)', marginBottom: 16 }}>
               {currentCard?.meaning}
             </div>
+
+            <PlecoLookupButton
+              character={currentCard?.character}
+              pinyin={currentCard?.pinyin}
+            />
 
             {currentCard?.examples?.length > 0 && (
               <div style={{

@@ -29,6 +29,8 @@ The old local PIN lock system has been removed. Do not describe it as the curren
   Routes the app and gates everything behind `AuthGate`.
 - `src/components/AuthGate.jsx`
   Shows the setup screen when Supabase env vars are missing and the sign-in form when auth is required.
+- `src/components/PlecoLookupButton.jsx`
+  Renders the shared "Open in Pleco" control for study flows and shows a desktop hint when the device is not mobile.
 - `src/contexts/AuthContext.jsx`
   Loads the Supabase session, signs in with email/password, signs out, and rejects unauthorized accounts.
 - `src/contexts/SyncContext.jsx`
@@ -36,6 +38,8 @@ The old local PIN lock system has been removed. Do not describe it as the curren
 - `src/lib/supabase.js`
   Creates the client with `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`.
   It also accepts legacy `VITE_SUPABASE_ANON_KEY` as a fallback.
+- `src/lib/pleco.js`
+  Builds Pleco deep-link URLs and detects whether the current device looks mobile enough to offer the live app shortcut.
 - `src/lib/db.js`
   Dexie schema plus local CRUD helpers. Local records carry sync metadata such as `syncId`, `updatedAt`, `dirty`, and `deletedAt`.
 - `src/lib/sync.js`
@@ -110,6 +114,7 @@ Working now:
 - single-account enforcement through Supabase schema and RLS
 - deck, card, review, and writing data synced through Supabase
 - local Dexie cache for normal app reads and offline-friendly behavior
+- Pleco deep-link lookup from active review and writing sessions on mobile
 - manual `Sync Now` and `Upload Local Data to Cloud` actions
 - encrypted local backup export/import with a separate backup password
 - mobile-friendly PWA deployment on Vercel

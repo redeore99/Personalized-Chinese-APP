@@ -15,6 +15,7 @@ A single-owner Chinese study PWA with spaced repetition review, Hanzi writing pr
 - Supabase auth is the entry point to the app.
 - Supabase stores the canonical cloud data.
 - Dexie remains the local cache and offline-friendly layer.
+- Review and writing screens can deep-link the current word into Pleco on mobile.
 - Encrypted backups use a separate backup password and are still useful as an extra recovery path.
 
 ## Setup
