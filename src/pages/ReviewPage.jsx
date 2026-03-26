@@ -1,23 +1,46 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import PlecoLookupButton from '../components/PlecoLookupButton'
-import { getDueCards, getNewCards, updateCard, logReview } from '../lib/db'
+import { DECK_FILTER_UNASSIGNED, getDeck, getDueCards, getNewCards, logReview, updateCard } from '../lib/db'
 import { calculateNextReview, previewIntervals, formatInterval } from '../lib/srs'
 
 export default function ReviewPage({ onRefresh }) {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [queue, setQueue] = useState([])
   const [currentIndex, setCurrentIndex] = useState(0)
   const [flipped, setFlipped] = useState(false)
   const [sessionStats, setSessionStats] = useState({ reviewed: 0, correct: 0 })
   const [loading, setLoading] = useState(true)
   const [finished, setFinished] = useState(false)
+  const [deckLabel, setDeckLabel] = useState('')
+
+  const deckParam = searchParams.get('deck')
+  const parsedDeckId = deckParam && deckParam !== DECK_FILTER_UNASSIGNED
+    ? Number(deckParam)
+    : null
+  const deckFilter = deckParam === DECK_FILTER_UNASSIGNED
+    ? DECK_FILTER_UNASSIGNED
+    : Number.isFinite(parsedDeckId)
+      ? parsedDeckId
+      : null
 
   // Load review queue
   useEffect(() => {
     async function loadQueue() {
-      const due = await getDueCards()
-      const newCards = await getNewCards(null, 10)
+      const [due, newCards, deck] = await Promise.all([
+        getDueCards(deckFilter),
+        getNewCards(deckFilter, 10),
+        deckFilter && deckFilter !== DECK_FILTER_UNASSIGNED ? getDeck(deckFilter) : Promise.resolve(null)
+      ])
+
+      if (deckFilter === DECK_FILTER_UNASSIGNED) {
+        setDeckLabel('Standalone Cards')
+      } else if (deck) {
+        setDeckLabel(deck.name)
+      } else {
+        setDeckLabel('')
+      }
 
       // Combine: due cards first, then some new cards
       const combined = [...due]
@@ -35,7 +58,7 @@ export default function ReviewPage({ onRefresh }) {
       }
     }
     loadQueue()
-  }, [])
+  }, [deckFilter])
 
   const currentCard = queue[currentIndex]
 
@@ -123,6 +146,12 @@ export default function ReviewPage({ onRefresh }) {
 
   return (
     <div className="page flex flex-col" style={{ height: '100%', paddingBottom: 80 }}>
+      {deckLabel && (
+        <div className="page-subtitle-chip" style={{ marginBottom: 12 }}>
+          Reviewing {deckLabel}
+        </div>
+      )}
+
       {/* Progress bar */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
         <div style={{

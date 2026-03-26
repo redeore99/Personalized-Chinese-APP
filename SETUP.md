@@ -41,6 +41,7 @@ VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
 11. Save the Vercel env vars and redeploy.
 12. Open the deployed app and sign in with the manually created account.
 13. On each older browser that already has local study data, sign in there too and use `Upload Local Data to Cloud` once.
+14. If you deploy the latest library-management update, rerun the latest schema SQL in Supabase so the new deck metadata columns (`slug`, `description`, `kind`, `source_key`, `color`, `sort_order`) exist before you rely on cross-device deck organization.
 
 ## Optional Local Development
 Local development is not required just to use the deployed app, but it is useful when making or testing code changes.
@@ -95,5 +96,9 @@ These external systems matter after code changes:
   Check Settings -> Cloud Sync to compare this device counts vs cloud counts.
   The latest app will auto-upload a fuller local library once if this device has more cards than the cloud.
   If the counts still differ after `Sync Now`, run `Upload Local Data to Cloud`.
+- Deck organization looks different across devices
+  Rerun the latest `supabase/schema.local.sql` or `supabase/schema.sql` in Supabase SQL Editor.
+  The current app can still sync with the legacy deck shape, but the richer deck metadata only syncs completely after those columns exist in Supabase.
+  Then press `Sync Now` on the fuller device first, followed by the other devices.
 - Repo changes are live in GitHub but not in production
   Make sure Vercel redeployed the latest commit and that env var changes were applied to a fresh deployment.

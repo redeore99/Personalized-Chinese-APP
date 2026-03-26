@@ -1,7 +1,10 @@
-import { db, getLocalDataCounts, getMetaValue, setMetaValue } from './db'
+import { db, getLocalDataCounts, getMetaValue, normalizeDeckMetadata, setMetaValue } from './db'
 import { isSupabaseConfigured, supabase } from './supabase'
 
 const REMOTE_FETCH_LIMIT = 5000
+const LEGACY_TABLE_COLUMNS = {
+  decks: ['id', 'owner_id', 'name', 'created_at', 'updated_at', 'deleted_at']
+}
 
 function requireSupabase() {
   if (!isSupabaseConfigured() || !supabase) {
@@ -20,6 +23,12 @@ function serializeDeck(deck, ownerId) {
     id: deck.syncId,
     owner_id: ownerId,
     name: deck.name,
+    slug: deck.slug,
+    description: deck.description,
+    kind: deck.kind,
+    source_key: deck.sourceKey,
+    color: deck.color,
+    sort_order: deck.sortOrder,
     created_at: deck.createdAt,
     updated_at: deck.updatedAt,
     deleted_at: deck.deletedAt
@@ -129,9 +138,19 @@ async function upsertRemoteDecks(rows) {
       continue
     }
 
+    const metadata = normalizeDeckMetadata({
+      name: row.name,
+      slug: row.slug,
+      description: row.description,
+      kind: row.kind,
+      sourceKey: row.source_key,
+      color: row.color,
+      sortOrder: row.sort_order
+    })
+
     const payload = {
       syncId: row.id,
-      name: row.name,
+      ...metadata,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       deletedAt: row.deleted_at,
@@ -278,14 +297,44 @@ async function pullFromCloud() {
 }
 
 async function upsertRemoteRows(tableName, rows) {
-  if (!rows.length) return
+  if (!rows.length) {
+    return { usedLegacyFallback: false }
+  }
 
   requireSupabase()
   const { error } = await supabase.from(tableName).upsert(rows, { onConflict: 'id' })
 
-  if (error) {
-    throw new Error(error.message)
+  if (!error) {
+    return { usedLegacyFallback: false }
   }
+
+  if (
+    tableName === 'decks' &&
+    (
+      /column .* does not exist/i.test(error.message) ||
+      /schema cache/i.test(error.message) ||
+      /Could not find the .* column/i.test(error.message)
+    )
+  ) {
+    const fallbackRows = rows.map(row => {
+      const allowedColumns = LEGACY_TABLE_COLUMNS[tableName]
+      return Object.fromEntries(
+        Object.entries(row).filter(([key]) => allowedColumns.includes(key))
+      )
+    })
+
+    const { error: fallbackError } = await supabase
+      .from(tableName)
+      .upsert(fallbackRows, { onConflict: 'id' })
+
+    if (fallbackError) {
+      throw new Error(fallbackError.message)
+    }
+
+    return { usedLegacyFallback: true }
+  }
+
+  throw new Error(error.message)
 }
 
 async function markRowsSynced(table, syncIds) {
@@ -323,8 +372,10 @@ async function pushRowsToCloud(userId, { includeClean = false } = {}) {
     .filter(entry => (includeClean || entry.dirty) && entry.cardSyncId)
     .map(entry => serializeWritingLog(entry, userId))
 
-  await upsertRemoteRows('decks', deckRows)
-  await markRowsSynced(db.decks, deckRows.map(row => row.id))
+  const deckUpsertResult = await upsertRemoteRows('decks', deckRows)
+  if (!deckUpsertResult.usedLegacyFallback) {
+    await markRowsSynced(db.decks, deckRows.map(row => row.id))
+  }
 
   await upsertRemoteRows('cards', cardRows)
   await markRowsSynced(db.cards, cardRows.map(row => row.id))

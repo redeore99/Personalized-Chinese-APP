@@ -4,6 +4,7 @@ import HomePage from './pages/HomePage'
 import ReviewPage from './pages/ReviewPage'
 import WritePage from './pages/WritePage'
 import AddCardPage from './pages/AddCardPage'
+import CardsPage from './pages/CardsPage'
 import DecksPage from './pages/DecksPage'
 import SettingsPage from './pages/SettingsPage'
 import AuthGate from './components/AuthGate'
@@ -68,6 +69,7 @@ function App() {
           <Route path="/review" element={<ReviewPage onRefresh={refreshStats} />} />
           <Route path="/write" element={<WritePage onRefresh={refreshStats} />} />
           <Route path="/add" element={<AddCardPage onRefresh={refreshStats} />} />
+          <Route path="/cards" element={<CardsPage onRefresh={refreshStats} />} />
           <Route path="/decks" element={<DecksPage onRefresh={refreshStats} />} />
           <Route path="/settings" element={<SettingsPage onRefresh={refreshStats} />} />
         </Routes>

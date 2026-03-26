@@ -35,21 +35,31 @@ The old local PIN lock system has been removed. Do not describe it as the curren
   Loads the Supabase session, signs in with email/password, signs out, rejects unauthorized accounts, and defers Supabase auth-event work outside the auth callback to avoid deadlocks.
 - `src/contexts/SyncContext.jsx`
   Runs cloud sync on login, on focus, every 30 seconds, restores saved sync timestamps, and exposes manual sync and full-upload actions from Settings.
+- `src/lib/deckCatalog.js`
+  Central metadata catalog for prebuilt decks such as HSK 5.
 - `src/lib/supabase.js`
   Creates the client with `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`.
   It also accepts legacy `VITE_SUPABASE_ANON_KEY` as a fallback.
 - `src/lib/pleco.js`
   Builds Pleco deep-link URLs and detects whether the current device looks mobile enough to offer the live app shortcut.
 - `src/lib/db.js`
-  Dexie schema plus local CRUD helpers. Local records carry sync metadata such as `syncId`, `updatedAt`, `dirty`, and `deletedAt`.
+  Dexie schema plus local CRUD helpers. It now stores richer deck metadata, supports card browsing/editing queries, and exposes recent study activity helpers alongside the sync metadata fields such as `syncId`, `updatedAt`, `dirty`, and `deletedAt`.
 - `src/lib/sync.js`
-  Pulls remote rows into Dexie, pushes dirty local rows to Supabase, can report cloud counts, and auto-promotes a fuller local library once if this device has more data than the cloud.
+  Pulls remote rows into Dexie, pushes dirty local rows to Supabase, can report cloud counts, auto-promotes a fuller local library once if this device has more data than the cloud, and falls back to the legacy deck shape until the latest Supabase deck columns have been applied.
 - `src/lib/backup.js`
   Encrypted export and restore for the local cache using a separate backup password.
+- `src/pages/HomePage.jsx`
+  Dashboard with due counts, today activity, recent review/writing history, and deck focus cards.
+- `src/pages/CardsPage.jsx`
+  Library browser with search, deck/status filters, and lightweight card editing including deck reassignment.
+- `src/pages/DecksPage.jsx`
+  Deck management view with custom deck creation, per-deck summaries, prebuilt repair, and direct browse/review actions.
+- `src/pages/AddCardPage.jsx`
+  Card creation form with deck assignment at save time.
 - `src/pages/SettingsPage.jsx`
   Shows account status, sync actions, backup export/import, and local data counts.
 - `supabase/schema.sql`
-  Public generic SQL schema with placeholder email.
+  Public generic SQL schema with placeholder email, owner-scoped sync tables, and deck metadata columns.
 - `supabase/schema.local.sql`
   Local-only, gitignored SQL schema containing the real allowed email and mirroring the current public schema.
 - `SETUP.md`
@@ -114,6 +124,11 @@ Working now:
 - single-account enforcement through Supabase schema and RLS
 - deck, card, review, and writing data synced through Supabase
 - local Dexie cache for normal app reads and offline-friendly behavior
+- structured deck metadata for custom vs prebuilt organization
+- card browse/search/edit UI with deck reassignment
+- manual cards can be filed into a deck on creation
+- home dashboard recent activity and deck focus summaries
+- deck-specific browse/review entry points
 - Pleco deep-link lookup from active review and writing sessions on mobile
 - manual `Sync Now` and `Upload Local Data to Cloud` actions
 - cloud vs local counts visible in Settings for sync troubleshooting
@@ -123,9 +138,8 @@ Working now:
 
 Still missing or incomplete:
 - dictionary auto-fill
-- full card edit/delete flows
-- search and browse UI
-- richer stats and charts
+- richer bulk card actions and deeper card editing for examples/history
+- richer stats and charts beyond the new dashboard activity view
 - audio playback
 - more advanced conflict handling or migrations beyond the current sync model
 

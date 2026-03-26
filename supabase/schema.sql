@@ -33,11 +33,64 @@ create table if not exists public.decks (
   id uuid primary key default gen_random_uuid(),
   owner_id uuid not null references auth.users(id) on delete cascade,
   name text not null,
+  slug text not null default '',
+  description text not null default '',
+  kind text not null default 'custom',
+  source_key text,
+  color text not null default '',
+  sort_order integer not null default 1000,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   deleted_at timestamptz,
   constraint decks_owner_id_id_unique unique (owner_id, id)
 );
+
+alter table public.decks add column if not exists slug text not null default '';
+alter table public.decks add column if not exists description text not null default '';
+alter table public.decks add column if not exists kind text not null default 'custom';
+alter table public.decks add column if not exists source_key text;
+alter table public.decks add column if not exists color text not null default '';
+alter table public.decks add column if not exists sort_order integer not null default 1000;
+
+alter table public.decks drop constraint if exists decks_kind_check;
+alter table public.decks
+  add constraint decks_kind_check
+  check (kind in ('custom', 'prebuilt', 'smart'));
+
+create index if not exists decks_owner_id_slug_idx on public.decks (owner_id, slug);
+create index if not exists decks_owner_id_kind_idx on public.decks (owner_id, kind);
+
+update public.decks
+set
+  slug = case
+    when coalesce(trim(slug), '') <> '' then slug
+    when name = 'HSK 5' then 'hsk-5'
+    else regexp_replace(lower(trim(name)), '[^a-z0-9]+', '-', 'g')
+  end,
+  description = case
+    when coalesce(trim(description), '') <> '' then description
+    when name = 'HSK 5' then '1,300 words - Upper Intermediate'
+    else ''
+  end,
+  kind = case
+    when name = 'HSK 5' then 'prebuilt'
+    when coalesce(trim(kind), '') = '' then 'custom'
+    else kind
+  end,
+  source_key = case
+    when name = 'HSK 5' then coalesce(nullif(source_key, ''), 'hsk5')
+    else nullif(source_key, '')
+  end,
+  color = case
+    when coalesce(trim(color), '') <> '' then color
+    when name = 'HSK 5' then '#fb7185'
+    else ''
+  end,
+  sort_order = case
+    when name = 'HSK 5' then 10
+    when sort_order is null or sort_order = 0 then 1000
+    else sort_order
+  end;
 
 create table if not exists public.cards (
   id uuid primary key default gen_random_uuid(),

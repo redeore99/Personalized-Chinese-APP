@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import HanziWriter from 'hanzi-writer'
 import PlecoLookupButton from '../components/PlecoLookupButton'
-import { getDueCards, getAllCards, updateCard, logWriting } from '../lib/db'
+import { DECK_FILTER_UNASSIGNED, getAllCards, getDeck, getDueCards, logWriting, updateCard } from '../lib/db'
 import { calculateNextReview } from '../lib/srs'
 
 export default function WritePage({ onRefresh }) {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const writerRef = useRef(null)
   const containerRef = useRef(null)
   const charCompleteRef = useRef(null)
@@ -34,15 +35,41 @@ export default function WritePage({ onRefresh }) {
   const [sessionStats, setSessionStats] = useState({ practiced: 0, perfect: 0 })
   const [wordScore, setWordScore] = useState(0)
   const [charCompleteFlash, setCharCompleteFlash] = useState(false)
+  const [deckLabel, setDeckLabel] = useState('')
+
+  const deckParam = searchParams.get('deck')
+  const parsedDeckId = deckParam && deckParam !== DECK_FILTER_UNASSIGNED
+    ? Number(deckParam)
+    : null
+  const deckFilter = deckParam === DECK_FILTER_UNASSIGNED
+    ? DECK_FILTER_UNASSIGNED
+    : Number.isFinite(parsedDeckId)
+      ? parsedDeckId
+      : null
 
   // Load writing queue
   useEffect(() => {
     async function loadQueue() {
-      let cards = await getDueCards()
+      const [dueCards, allCards, deck] = await Promise.all([
+        getDueCards(deckFilter),
+        getAllCards(deckFilter),
+        deckFilter && deckFilter !== DECK_FILTER_UNASSIGNED ? getDeck(deckFilter) : Promise.resolve(null)
+      ])
+
+      if (deckFilter === DECK_FILTER_UNASSIGNED) {
+        setDeckLabel('Standalone Cards')
+      } else if (deck) {
+        setDeckLabel(deck.name)
+      } else {
+        setDeckLabel('')
+      }
+
+      let cards = dueCards
       if (cards.length === 0) {
-        cards = await getAllCards()
+        cards = [...allCards]
         cards.sort(() => Math.random() - 0.5)
       }
+
       // Allow up to 4-char words (most HSK vocabulary)
       cards = cards.filter(c => c.character.length >= 1 && c.character.length <= 4)
       setQueue(cards.slice(0, 20))
@@ -50,7 +77,7 @@ export default function WritePage({ onRefresh }) {
       if (cards.length === 0) setFinished(true)
     }
     loadQueue()
-  }, [])
+  }, [deckFilter])
 
   const currentCard = queue[currentIndex]
 
@@ -329,6 +356,12 @@ export default function WritePage({ onRefresh }) {
 
   return (
     <div className="page write-page">
+      {deckLabel && (
+        <div className="page-subtitle-chip" style={{ marginBottom: 12 }}>
+          Practicing {deckLabel}
+        </div>
+      )}
+
       {/* Progress bar */}
       <div className="write-progress-bar">
         <div className="write-progress-fill" style={{ '--progress': `${(currentIndex / queue.length) * 100}%` }} />
