@@ -32,7 +32,7 @@ The old local PIN lock system has been removed. Do not describe it as the curren
 - `src/components/PlecoLookupButton.jsx`
   Renders the shared "Open in Pleco" control for study flows and shows a desktop hint when the device is not mobile.
 - `src/contexts/AuthContext.jsx`
-  Loads the Supabase session, signs in with email/password, signs out, and rejects unauthorized accounts.
+  Loads the Supabase session, signs in with email/password, signs out, rejects unauthorized accounts, and defers Supabase auth-event work outside the auth callback to avoid deadlocks.
 - `src/contexts/SyncContext.jsx`
   Runs cloud sync on login, on focus, every 30 seconds, and on manual actions from Settings.
 - `src/lib/supabase.js`

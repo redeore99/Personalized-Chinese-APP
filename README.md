@@ -16,6 +16,7 @@ A single-owner Chinese study PWA with spaced repetition review, Hanzi writing pr
 - Supabase stores the canonical cloud data.
 - Dexie remains the local cache and offline-friendly layer.
 - Review and writing screens can deep-link the current word into Pleco on mobile.
+- Auth session validation is deferred outside Supabase auth-event callbacks to avoid client deadlocks during session restore.
 - Encrypted backups use a separate backup password and are still useful as an extra recovery path.
 
 ## Setup

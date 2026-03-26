@@ -2,6 +2,18 @@ import { createContext, useContext, useEffect, useState } from 'react'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
 
 const AuthContext = createContext(null)
+const AUTH_TIMEOUT_MS = 10000
+
+function withTimeout(promise, timeoutMessage) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      window.setTimeout(() => {
+        reject(new Error(timeoutMessage))
+      }, AUTH_TIMEOUT_MS)
+    })
+  ])
+}
 
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
@@ -15,50 +27,92 @@ export function AuthProvider({ children }) {
     }
 
     let mounted = true
+    let validationRun = 0
 
-    const applySession = async nextSession => {
-      if (nextSession) {
-        const { data: isAllowed, error } = await supabase.rpc('is_allowed_user')
-
-        if (error || !isAllowed) {
-          console.error('Unauthorized account rejected:', error)
-          const reason = error?.message ? ` (${error.message})` : ''
-          setAuthError(`This account is not authorized for this app.${reason}`)
-          setSession(null)
-          setLoading(false)
-          await supabase.auth.signOut()
-          return
-        }
-      }
-
-      if (nextSession && !nextSession.user) {
-        await supabase.auth.signOut()
-        setSession(null)
-        setLoading(false)
-        return
-      }
-
-      setSession(nextSession ?? null)
+    const rejectSession = (message, shouldSignOut = true) => {
+      setAuthError(message)
+      setSession(null)
       setLoading(false)
+
+      if (shouldSignOut) {
+        window.setTimeout(() => {
+          void supabase.auth.signOut()
+        }, 0)
+      }
     }
 
-    supabase.auth.getSession().then(async ({ data, error }) => {
-      if (!mounted) return
+    const applySession = async nextSession => {
+      const runId = ++validationRun
 
-      if (error) {
-        console.error('Supabase session load failed:', error)
+      try {
+        if (nextSession) {
+          const { data: isAllowed, error } = await withTimeout(
+            supabase.rpc('is_allowed_user'),
+            'Authorization check timed out.'
+          )
+
+          if (!mounted || runId !== validationRun) {
+            return
+          }
+
+          if (error || !isAllowed) {
+            console.error('Unauthorized account rejected:', error)
+            const reason = error?.message ? ` (${error.message})` : ''
+            rejectSession(`This account is not authorized for this app.${reason}`)
+            return
+          }
+        }
+
+        if (nextSession && !nextSession.user) {
+          rejectSession('We could not restore your session. Please sign in again.')
+          return
+        }
+
+        setSession(nextSession ?? null)
+        setLoading(false)
+      } catch (error) {
+        if (!mounted || runId !== validationRun) {
+          return
+        }
+
+        console.error('Supabase session validation failed:', error)
+        rejectSession('We could not verify your session. Please sign in again.')
       }
+    }
 
-      await applySession(data.session ?? null)
-    })
+    withTimeout(
+      supabase.auth.getSession(),
+      'Session check timed out.'
+    )
+      .then(({ data, error }) => {
+        if (!mounted) return
 
-    const { data } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
+        if (error) {
+          console.error('Supabase session load failed:', error)
+        }
+
+        void applySession(data.session ?? null)
+      })
+      .catch(error => {
+        if (!mounted) return
+
+        console.error('Supabase session bootstrap failed:', error)
+        rejectSession('We could not restore your session. Please sign in again.', false)
+      })
+
+    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       if (!mounted) return
-      await applySession(nextSession)
+
+      // Supabase warns that awaiting Supabase calls inside this callback can deadlock.
+      window.setTimeout(() => {
+        if (!mounted) return
+        void applySession(nextSession)
+      }, 0)
     })
 
     return () => {
       mounted = false
+      validationRun += 1
       data.subscription.unsubscribe()
     }
   }, [])

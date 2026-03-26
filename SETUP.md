@@ -88,6 +88,8 @@ These external systems matter after code changes:
   If you use `supabase/schema.local.sql`, rerun the latest version of that file in Supabase SQL Editor.
   Otherwise rerun `supabase/schema.sql`.
   That recreates `public.is_allowed_user()` with the current `auth.users`-based check and restores the execute grant for `authenticated`.
+- App stays on "Checking your session"
+  Redeploy the latest code, then fully close and reopen the installed PWA or refresh the browser tab so the updated auth bootstrap is loaded.
 - Cloud sync is missing old cards
   Open the old device or browser, sign in there, and run `Upload Local Data to Cloud`.
 - Repo changes are live in GitHub but not in production
