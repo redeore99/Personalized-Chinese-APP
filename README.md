@@ -20,8 +20,9 @@ A single-owner Chinese study PWA with spaced repetition review, Hanzi writing pr
 - The app now has a dedicated card-library screen for search, filtering, and lightweight editing.
 - Home now shows recent review and writing activity plus deck-level focus summaries.
 - Review and writing screens can deep-link the current word into Pleco on mobile.
+- The installed PWA now registers updates eagerly and reloads when a new service worker takes control, so mobile should pick up fresh deployments more reliably.
 - Auth session validation is deferred outside Supabase auth-event callbacks to avoid client deadlocks during session restore.
-- If a device has more local study data than the cloud and has never done a full migration upload, the sync layer now auto-promotes that fuller local library once.
+- `Sync Now` is now a single smart reconcile action: it pulls cloud changes, pushes local changes, and automatically runs a full-library repair pass if counts still differ.
 - Prebuilt decks can now be repaired in-place if a device has only a partial local import.
 - The sync layer can fall back to the legacy deck shape if Supabase has not been upgraded yet, but deck metadata sync is only complete after rerunning the latest SQL.
 - Encrypted backups use a separate backup password and are still useful as an extra recovery path.

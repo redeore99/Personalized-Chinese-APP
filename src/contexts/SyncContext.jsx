@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import { useAuth } from './AuthContext'
 import { getMetaValue } from '../lib/db'
 import { isSupabaseConfigured } from '../lib/supabase'
-import { migrateLocalDataToCloud, syncWithCloud } from '../lib/sync'
+import { syncWithCloud } from '../lib/sync'
 
 const SyncContext = createContext(null)
 
@@ -10,7 +10,7 @@ export function SyncProvider({ children }) {
   const { user } = useAuth()
   const [status, setStatus] = useState('idle')
   const [lastSyncedAt, setLastSyncedAt] = useState(null)
-  const [lastMigratedAt, setLastMigratedAt] = useState(null)
+  const [lastReconciledAt, setLastReconciledAt] = useState(null)
   const [error, setError] = useState(null)
   const inFlightRef = useRef(false)
 
@@ -34,9 +34,9 @@ export function SyncProvider({ children }) {
         setLastSyncedAt(result.syncedAt)
       }
 
-      if (result?.migratedAt) {
-        setLastMigratedAt(result.migratedAt)
-        setLastSyncedAt(result.migratedAt)
+      if (result?.reconciledAt) {
+        setLastReconciledAt(result.reconciledAt)
+        setLastSyncedAt(result.reconciledAt)
       }
 
       setStatus('idle')
@@ -56,11 +56,6 @@ export function SyncProvider({ children }) {
     return runExclusive('syncing', () => syncWithCloud(user.id))
   }, [runExclusive, user])
 
-  const migrateLocalData = useCallback(() => {
-    if (!user) return Promise.resolve({ skipped: true })
-    return runExclusive('migrating', () => migrateLocalDataToCloud(user.id))
-  }, [runExclusive, user])
-
   useEffect(() => {
     if (!user || !isSupabaseConfigured()) {
       return undefined
@@ -71,10 +66,10 @@ export function SyncProvider({ children }) {
     Promise.all([
       getMetaValue(`cloud:lastSync:${user.id}`),
       getMetaValue(`cloud:lastMigration:${user.id}`)
-    ]).then(([savedSyncAt, savedMigrationAt]) => {
+    ]).then(([savedSyncAt, savedReconciledAt]) => {
       if (cancelled) return
       setLastSyncedAt(savedSyncAt)
-      setLastMigratedAt(savedMigrationAt)
+      setLastReconciledAt(savedReconciledAt)
     })
 
     return () => {
@@ -86,7 +81,7 @@ export function SyncProvider({ children }) {
     if (!user || !isSupabaseConfigured()) {
       setStatus('idle')
       setLastSyncedAt(null)
-      setLastMigratedAt(null)
+      setLastReconciledAt(null)
       setError(null)
       return undefined
     }
@@ -115,9 +110,8 @@ export function SyncProvider({ children }) {
         status,
         error,
         lastSyncedAt,
-        lastMigratedAt,
+        lastReconciledAt,
         syncNow,
-        migrateLocalData,
         isConfigured: isSupabaseConfigured()
       }}
     >

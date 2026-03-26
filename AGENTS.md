@@ -34,7 +34,7 @@ The old local PIN lock system has been removed. Do not describe it as the curren
 - `src/contexts/AuthContext.jsx`
   Loads the Supabase session, signs in with email/password, signs out, rejects unauthorized accounts, and defers Supabase auth-event work outside the auth callback to avoid deadlocks.
 - `src/contexts/SyncContext.jsx`
-  Runs cloud sync on login, on focus, every 30 seconds, restores saved sync timestamps, and exposes manual sync and full-upload actions from Settings.
+  Runs cloud sync on login, on focus, every 30 seconds, restores saved sync timestamps, and exposes a single manual sync/reconcile action from Settings.
 - `src/lib/deckCatalog.js`
   Central metadata catalog for prebuilt decks such as HSK 5.
 - `src/lib/supabase.js`
@@ -45,7 +45,7 @@ The old local PIN lock system has been removed. Do not describe it as the curren
 - `src/lib/db.js`
   Dexie schema plus local CRUD helpers. It now stores richer deck metadata, supports card browsing/editing queries, and exposes recent study activity helpers alongside the sync metadata fields such as `syncId`, `updatedAt`, `dirty`, and `deletedAt`.
 - `src/lib/sync.js`
-  Pulls remote rows into Dexie, pushes dirty local rows to Supabase, can report cloud counts, auto-promotes a fuller local library once if this device has more data than the cloud, and falls back to the legacy deck shape until the latest Supabase deck columns have been applied.
+  Pulls remote rows into Dexie, pushes dirty local rows to Supabase, can report cloud counts, automatically runs a full-library reconcile when local and cloud counts still disagree, and falls back to the legacy deck shape until the latest Supabase deck columns have been applied.
 - `src/lib/backup.js`
   Encrypted export and restore for the local cache using a separate backup password.
 - `src/pages/HomePage.jsx`
@@ -130,11 +130,12 @@ Working now:
 - home dashboard recent activity and deck focus summaries
 - deck-specific browse/review entry points
 - Pleco deep-link lookup from active review and writing sessions on mobile
-- manual `Sync Now` and `Upload Local Data to Cloud` actions
+- manual `Sync Now` with automatic full reconcile when counts drift
 - cloud vs local counts visible in Settings for sync troubleshooting
 - prebuilt deck repair when a device has only a partial local import
 - encrypted local backup export/import with a separate backup password
 - mobile-friendly PWA deployment on Vercel
+- eager PWA update registration so installed mobile builds refresh more reliably
 
 Still missing or incomplete:
 - dictionary auto-fill

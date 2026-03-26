@@ -1,9 +1,29 @@
-import { db, getLocalDataCounts, getMetaValue, normalizeDeckMetadata, setMetaValue } from './db'
+import { db, getLocalDataCounts, normalizeDeckMetadata, setMetaValue } from './db'
 import { isSupabaseConfigured, supabase } from './supabase'
 
 const REMOTE_FETCH_LIMIT = 5000
 const LEGACY_TABLE_COLUMNS = {
   decks: ['id', 'owner_id', 'name', 'created_at', 'updated_at', 'deleted_at']
+}
+
+function countsDiffer(localCounts, cloudCounts) {
+  return (
+    localCounts.cards !== cloudCounts.cards ||
+    localCounts.decks !== cloudCounts.decks ||
+    localCounts.reviewLog !== cloudCounts.reviewLog ||
+    localCounts.writingLog !== cloudCounts.writingLog
+  )
+}
+
+function combinePushCounts(primaryResult, secondaryResult) {
+  return {
+    pushed: {
+      decks: (primaryResult?.pushed?.decks || 0) + (secondaryResult?.pushed?.decks || 0),
+      cards: (primaryResult?.pushed?.cards || 0) + (secondaryResult?.pushed?.cards || 0),
+      reviewLogs: (primaryResult?.pushed?.reviewLogs || 0) + (secondaryResult?.pushed?.reviewLogs || 0),
+      writingLogs: (primaryResult?.pushed?.writingLogs || 0) + (secondaryResult?.pushed?.writingLogs || 0)
+    }
+  }
 }
 
 function requireSupabase() {
@@ -396,43 +416,44 @@ async function pushRowsToCloud(userId, { includeClean = false } = {}) {
   }
 }
 
-export async function syncWithCloud(userId) {
+export async function syncWithCloud(userId, { forceFullReconcile = false } = {}) {
   requireSupabase()
 
   if (!userId) {
     throw new Error('Cannot sync without an authenticated user.')
   }
 
-  const [hasMigratedBefore, pullResult] = await Promise.all([
-    getMetaValue(`cloud:lastMigration:${userId}`),
-    pullFromCloud()
-  ])
+  let pullResult = await pullFromCloud()
+  let pushResult = await pushRowsToCloud(userId)
+  let localCounts = await getLocalDataCounts()
+  let cloudCounts = await getCloudDataCounts()
+  let fullReconcilePerformed = false
 
-  const localCounts = await getLocalDataCounts()
-  const pulledCounts = pullResult.pulled
-  const shouldPromoteLocalSnapshot = !hasMigratedBefore && (
-    localCounts.cards > pulledCounts.cards ||
-    localCounts.decks > pulledCounts.decks ||
-    localCounts.reviewLog > pulledCounts.reviewLogs ||
-    localCounts.writingLog > pulledCounts.writingLogs
-  )
+  if (forceFullReconcile || countsDiffer(localCounts, cloudCounts)) {
+    fullReconcilePerformed = true
 
-  const pushResult = shouldPromoteLocalSnapshot
-    ? await pushRowsToCloud(userId, { includeClean: true })
-    : await pushRowsToCloud(userId)
+    const reconcilePushResult = await pushRowsToCloud(userId, { includeClean: true })
+    pushResult = combinePushCounts(pushResult, reconcilePushResult)
+    pullResult = await pullFromCloud()
+    localCounts = await getLocalDataCounts()
+    cloudCounts = await getCloudDataCounts()
+  }
 
   const syncedAt = new Date().toISOString()
+  const countsStillDiffer = countsDiffer(localCounts, cloudCounts)
 
   await setMetaValue(`cloud:lastSync:${userId}`, syncedAt)
-  if (shouldPromoteLocalSnapshot) {
+  if (fullReconcilePerformed) {
     await setMetaValue(`cloud:lastMigration:${userId}`, syncedAt)
   }
 
   return {
     syncedAt,
-    migratedAt: shouldPromoteLocalSnapshot ? syncedAt : null,
-    localSnapshotPromoted: shouldPromoteLocalSnapshot,
+    reconciledAt: fullReconcilePerformed ? syncedAt : null,
+    fullReconcilePerformed,
+    countsStillDiffer,
     localCounts,
+    cloudCounts,
     ...pullResult,
     ...pushResult
   }
@@ -445,18 +466,7 @@ export async function migrateLocalDataToCloud(userId) {
     throw new Error('Cannot migrate data without an authenticated user.')
   }
 
-  const localCounts = await getLocalDataCounts()
-  const pushResult = await pushRowsToCloud(userId, { includeClean: true })
-  const migratedAt = new Date().toISOString()
-
-  await setMetaValue(`cloud:lastMigration:${userId}`, migratedAt)
-  await setMetaValue(`cloud:lastSync:${userId}`, migratedAt)
-
-  return {
-    migratedAt,
-    localCounts,
-    ...pushResult
-  }
+  return syncWithCloud(userId, { forceFullReconcile: true })
 }
 
 export async function getCloudDataCounts() {

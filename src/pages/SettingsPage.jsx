@@ -12,21 +12,19 @@ function formatTimestamp(value) {
 
 function formatSyncStatus(status, error) {
   if (status === 'syncing') return 'Syncing with the cloud...'
-  if (status === 'migrating') return 'Uploading this device data to the cloud...'
   if (status === 'error') return error || 'Cloud sync failed.'
   return 'Idle'
 }
 
 export default function SettingsPage({ onRefresh }) {
   const { user, signOut } = useAuth()
-  const { status: syncStatus, error: syncError, lastSyncedAt, lastMigratedAt, syncNow, migrateLocalData } = useSync()
+  const { status: syncStatus, error: syncError, lastSyncedAt, lastReconciledAt, syncNow } = useSync()
 
   const [backupPassword, setBackupPassword] = useState('')
   const [status, setStatus] = useState(null) // { type: 'success'|'error', message }
   const [importing, setImporting] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [syncingNow, setSyncingNow] = useState(false)
-  const [migratingNow, setMigratingNow] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
   const [localCounts, setLocalCounts] = useState({
     cards: 0,
@@ -73,7 +71,7 @@ export default function SettingsPage({ onRefresh }) {
   useEffect(() => {
     refreshLocalCounts()
     refreshCloudCounts()
-  }, [lastSyncedAt, lastMigratedAt])
+  }, [lastSyncedAt, lastReconciledAt])
 
   const handleExport = async () => {
     if (backupPassword.trim().length < 4) {
@@ -111,7 +109,7 @@ export default function SettingsPage({ onRefresh }) {
       if (result.success) {
         setStatus({
           type: 'success',
-          message: `${result.message} If you want these restored records online too, run "Upload Local Data to Cloud" below.`
+          message: `${result.message} If you want these restored records online too, run "Sync Now" after the restore.`
         })
         await refreshLocalCounts()
         onRefresh?.()
@@ -136,39 +134,29 @@ export default function SettingsPage({ onRefresh }) {
     if (result?.error) {
       setStatus({ type: 'error', message: result.error.message })
     } else if (!result?.skipped) {
-      setStatus({
-        type: 'success',
-        message: result.localSnapshotPromoted
-          ? 'Cloud sync complete. This device had more cards than the cloud, so its full local library was uploaded once.'
-          : 'Cloud sync complete.'
-      })
+      const localAhead = result.localCounts.cards > result.cloudCounts.cards
+      const cloudAhead = result.cloudCounts.cards > result.localCounts.cards
+
+      if (result.countsStillDiffer) {
+        setStatus({
+          type: 'error',
+          message: 'Sync finished, but this device and the cloud still disagree on record counts. Refresh the app once and run Sync Now again.'
+        })
+      } else {
+        setStatus({
+          type: 'success',
+          message: result.fullReconcilePerformed
+            ? `Cloud sync complete. A full-library reconcile was also run automatically to repair count drift.${cloudAhead ? ' This device pulled newer cloud data.' : ''}${localAhead ? ' This device also uploaded records the cloud was missing.' : ''}`
+            : 'Cloud sync complete.'
+        })
+      }
+
       await refreshLocalCounts()
       await refreshCloudCounts()
       onRefresh?.()
     }
 
     setSyncingNow(false)
-  }
-
-  const handleMigrateLocalData = async () => {
-    setMigratingNow(true)
-    setStatus(null)
-
-    const result = await migrateLocalData()
-    if (result?.error) {
-      setStatus({ type: 'error', message: result.error.message })
-    } else if (!result?.skipped) {
-      const counts = result.localCounts
-      setStatus({
-        type: 'success',
-        message: `Uploaded local data to the cloud: ${counts.cards} cards, ${counts.decks} decks, ${counts.reviewLog} reviews, ${counts.writingLog} writing logs.`
-      })
-      await refreshLocalCounts()
-      await refreshCloudCounts()
-      onRefresh?.()
-    }
-
-    setMigratingNow(false)
   }
 
   const handleSignOut = async () => {
@@ -182,6 +170,13 @@ export default function SettingsPage({ onRefresh }) {
 
     setSigningOut(false)
   }
+
+  const countsMatch = (
+    localCounts.cards === cloudCounts.cards &&
+    localCounts.decks === cloudCounts.decks &&
+    localCounts.reviewLog === cloudCounts.reviewLog &&
+    localCounts.writingLog === cloudCounts.writingLog
+  )
 
   return (
     <div className="page">
@@ -214,7 +209,7 @@ export default function SettingsPage({ onRefresh }) {
         </p>
         <p className="text-secondary" style={{ fontSize: 13, marginBottom: 12, lineHeight: 1.5 }}>
           Last sync: {formatTimestamp(lastSyncedAt)}<br />
-          Local migration upload: {formatTimestamp(lastMigratedAt)}
+          Last full reconcile: {formatTimestamp(lastReconciledAt)}
         </p>
 
         <div className="card" style={{ padding: 14, marginBottom: 12, background: 'var(--bg-elevated)' }}>
@@ -233,30 +228,24 @@ export default function SettingsPage({ onRefresh }) {
           </div>
         </div>
 
+        {!loadingCloudCounts && !countsMatch && (
+          <div className="card-message card-message-warning" style={{ marginBottom: 12 }}>
+            This device and the cloud do not match yet. `Sync Now` will pull remote changes, push local changes, and automatically run a deeper full-library reconcile if the counts still differ.
+          </div>
+        )}
+
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button
             className="btn btn-primary btn-sm"
             onClick={handleSyncNow}
-            disabled={syncingNow || syncStatus === 'syncing' || syncStatus === 'migrating'}
+            disabled={syncingNow || syncStatus === 'syncing'}
           >
             {syncingNow || syncStatus === 'syncing' ? 'Syncing...' : 'Sync Now'}
-          </button>
-
-          <button
-            className="btn btn-secondary btn-sm"
-            onClick={handleMigrateLocalData}
-            disabled={migratingNow || syncStatus === 'syncing' || syncStatus === 'migrating'}
-          >
-            {migratingNow || syncStatus === 'migrating' ? 'Uploading...' : 'Upload Local Data to Cloud'}
           </button>
         </div>
 
         <p className="text-secondary" style={{ fontSize: 12, marginTop: 12, lineHeight: 1.5 }}>
-          `Sync Now` is the normal everyday button: it pulls cloud changes down, then uploads local changes from this device.
-          `Upload Local Data to Cloud` is the repair button for old devices or restored backups. It forces this device&apos;s full local library into the cloud, even records that were already marked clean.
-        </p>
-        <p className="text-secondary" style={{ fontSize: 12, marginTop: 8, lineHeight: 1.5 }}>
-          If this device clearly has more cards than the cloud, the latest app now performs that full upload automatically once during normal sync.
+          `Sync Now` is now the only sync action: it pulls cloud changes down, uploads local dirty changes, and if local and cloud counts still disagree it automatically performs a full-library reconcile and pulls again.
         </p>
       </div>
 
@@ -297,7 +286,7 @@ export default function SettingsPage({ onRefresh }) {
       <div className="card" style={{ marginBottom: 12 }}>
         <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Restore from Backup</h3>
         <p className="text-secondary" style={{ fontSize: 13, marginBottom: 12, lineHeight: 1.4 }}>
-          Replaces the current local study cache with the backup. After restoring, use "Upload Local Data to Cloud" if you want the restored data pushed into your account.
+          Replaces the current local study cache with the backup. After restoring, use "Sync Now" if you want the restored data pushed into your account.
         </p>
         <input
           ref={fileInputRef}
