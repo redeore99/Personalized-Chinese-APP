@@ -99,6 +99,9 @@ These external systems matter after code changes:
   Check Settings -> Cloud Sync to compare this device counts vs cloud counts.
   The latest app now uses one `Sync Now` action that pulls cloud changes, pushes local changes, and automatically runs a deeper full-library reconcile if counts still differ.
   If counts still do not converge after a second `Sync Now`, refresh the app once and sync again.
+- A deleted card comes back after syncing another device
+  Update both devices to the latest build and run `Sync Now` on each.
+  The current sync logic treats deletions as tombstones so a stale undeleted copy should no longer recreate the card.
 - Deck organization looks different across devices
   Rerun the latest `supabase/schema.local.sql` or `supabase/schema.sql` in Supabase SQL Editor.
   The current app can still sync with the legacy deck shape, but the richer deck metadata only syncs completely after those columns exist in Supabase.

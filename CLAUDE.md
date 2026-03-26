@@ -45,7 +45,7 @@ The old local PIN lock system has been removed. Do not describe it as the curren
 - `src/lib/db.js`
   Dexie schema plus local CRUD helpers. It now stores richer deck metadata, supports card browsing/editing queries, and exposes recent study activity helpers alongside the sync metadata fields such as `syncId`, `updatedAt`, `dirty`, and `deletedAt`.
 - `src/lib/sync.js`
-  Pulls remote rows into Dexie, pushes dirty local rows to Supabase, can report cloud counts, automatically runs a full-library reconcile when local and cloud counts still disagree, and falls back to the legacy deck shape until the latest Supabase deck columns have been applied.
+  Pulls remote rows into Dexie, pushes dirty local rows to Supabase, can report cloud counts, automatically runs a full-library reconcile when local and cloud counts still disagree, treats deletions as tombstones so stale undeleted rows do not resurrect records, and falls back to the legacy deck shape until the latest Supabase deck columns have been applied.
 - `src/lib/backup.js`
   Encrypted export and restore for the local cache using a separate backup password.
 - `src/pages/HomePage.jsx`

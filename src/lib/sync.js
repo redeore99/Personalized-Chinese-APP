@@ -38,6 +38,30 @@ function isLocalNewer(localUpdatedAt, remoteUpdatedAt) {
   return new Date(localUpdatedAt).getTime() > new Date(remoteUpdatedAt).getTime()
 }
 
+function shouldKeepLocalVersion(existing, remoteUpdatedAt, remoteDeletedAt) {
+  if (!existing) {
+    return false
+  }
+
+  const localDeletedAt = existing.deletedAt || null
+
+  // Tombstones win over non-deleted copies so a deletion on one device
+  // cannot be silently undone by a stale clean copy from another device.
+  if (localDeletedAt && !remoteDeletedAt) {
+    return true
+  }
+
+  if (remoteDeletedAt) {
+    return false
+  }
+
+  if (existing.dirty && isLocalNewer(existing.updatedAt, remoteUpdatedAt)) {
+    return true
+  }
+
+  return false
+}
+
 function serializeDeck(deck, ownerId) {
   return {
     id: deck.syncId,
@@ -154,7 +178,7 @@ async function upsertRemoteDecks(rows) {
 
   for (const row of rows) {
     const existing = await db.decks.where('syncId').equals(row.id).first()
-    if (existing?.dirty && isLocalNewer(existing.updatedAt, row.updated_at)) {
+    if (shouldKeepLocalVersion(existing, row.updated_at, row.deleted_at)) {
       continue
     }
 
@@ -193,7 +217,7 @@ async function upsertRemoteCards(rows) {
 
   for (const row of rows) {
     const existing = await db.cards.where('syncId').equals(row.id).first()
-    if (existing?.dirty && isLocalNewer(existing.updatedAt, row.updated_at)) {
+    if (shouldKeepLocalVersion(existing, row.updated_at, row.deleted_at)) {
       continue
     }
 
