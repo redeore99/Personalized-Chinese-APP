@@ -47,7 +47,7 @@ The old local PIN lock system has been removed. Do not describe it as the curren
 - `supabase/schema.sql`
   Public generic SQL schema with placeholder email.
 - `supabase/schema.local.sql`
-  Local-only, gitignored SQL schema containing the real allowed email.
+  Local-only, gitignored SQL schema containing the real allowed email and mirroring the current public schema.
 - `SETUP.md`
   Public setup instructions.
 - `SETUP.local.md`
@@ -57,7 +57,7 @@ The old local PIN lock system has been removed. Do not describe it as the curren
 - The app is intended for one manually created Supabase account.
 - The allowed identity is enforced in Supabase, not in a public frontend env var.
 - `public.app_config.allowed_email` stores the allowed email.
-- `public.is_allowed_user()` compares the authenticated email from the JWT to that allowed email.
+- `public.is_allowed_user()` looks up the authenticated Supabase user via `auth.uid()` and compares that account email to the allowed email.
 - Row Level Security policies require both:
   - `public.is_allowed_user()`
   - `auth.uid() = owner_id`

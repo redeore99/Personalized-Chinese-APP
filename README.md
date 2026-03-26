@@ -20,6 +20,7 @@ A single-owner Chinese study PWA with spaced repetition review, Hanzi writing pr
 ## Setup
 - Public setup guide: [SETUP.md](/C:/Users/pablo/Desktop/Personalized%20Chinese%20APP/SETUP.md)
 - Private local notes: `SETUP.local.md` and `supabase/schema.local.sql`
+- If you keep a private local schema, keep it aligned with `supabase/schema.sql` and only swap in the real allowed email locally.
 
 Tracked files stay generic on purpose. Private owner-specific values should stay in local ignored files and in the Supabase or Vercel dashboards.
 

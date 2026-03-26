@@ -11,6 +11,9 @@ Private local files:
 - `SETUP.local.md`
 - `supabase/schema.local.sql`
 
+If you keep a private local schema, keep it structurally aligned with the latest
+`supabase/schema.sql`. Only the allowed email should stay different.
+
 ## What Lives Where
 - GitHub stores the code.
 - Vercel deploys the app from GitHub.
@@ -82,23 +85,9 @@ These external systems matter after code changes:
   Check the Vercel env vars and redeploy.
 - Login works in Supabase but not in the app
   Check that the allowed email in the SQL schema matches the manually created user.
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< codex/troubleshoot-login-issue
-  If it still fails, rerun the latest `supabase/schema.sql` so `public.is_allowed_user()` and its execute grant for `authenticated` are recreated.
-=======
-  If it still fails, rerun the latest `supabase/schema.sql` so `public.is_allowed_user()` is recreated with the current auth check logic.
->>>>>>> main
-=======
-  If it still fails, rerun the latest `supabase/schema.sql` so `public.is_allowed_user()` and its execute grant for `authenticated` are recreated.
->>>>>>> theirs
-=======
-  If it still fails, rerun the latest `supabase/schema.sql` so `public.is_allowed_user()` and its execute grant for `authenticated` are recreated.
->>>>>>> theirs
-=======
-  If it still fails, rerun the latest `supabase/schema.sql` so `public.is_allowed_user()` and its execute grant for `authenticated` are recreated.
->>>>>>> theirs
+  If you use `supabase/schema.local.sql`, rerun the latest version of that file in Supabase SQL Editor.
+  Otherwise rerun `supabase/schema.sql`.
+  That recreates `public.is_allowed_user()` with the current `auth.users`-based check and restores the execute grant for `authenticated`.
 - Cloud sync is missing old cards
   Open the old device or browser, sign in there, and run `Upload Local Data to Cloud`.
 - Repo changes are live in GitHub but not in production
