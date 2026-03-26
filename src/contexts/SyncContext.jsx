@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { useAuth } from './AuthContext'
+import { getMetaValue } from '../lib/db'
 import { isSupabaseConfigured } from '../lib/supabase'
 import { migrateLocalDataToCloud, syncWithCloud } from '../lib/sync'
 
@@ -59,6 +60,27 @@ export function SyncProvider({ children }) {
     if (!user) return Promise.resolve({ skipped: true })
     return runExclusive('migrating', () => migrateLocalDataToCloud(user.id))
   }, [runExclusive, user])
+
+  useEffect(() => {
+    if (!user || !isSupabaseConfigured()) {
+      return undefined
+    }
+
+    let cancelled = false
+
+    Promise.all([
+      getMetaValue(`cloud:lastSync:${user.id}`),
+      getMetaValue(`cloud:lastMigration:${user.id}`)
+    ]).then(([savedSyncAt, savedMigrationAt]) => {
+      if (cancelled) return
+      setLastSyncedAt(savedSyncAt)
+      setLastMigratedAt(savedMigrationAt)
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [user])
 
   useEffect(() => {
     if (!user || !isSupabaseConfigured()) {

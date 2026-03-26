@@ -3,6 +3,7 @@ import { exportBackup, importBackup, downloadBlob } from '../lib/backup'
 import { getLocalDataCounts } from '../lib/db'
 import { useAuth } from '../contexts/AuthContext'
 import { useSync } from '../contexts/SyncContext'
+import { getCloudDataCounts } from '../lib/sync'
 
 function formatTimestamp(value) {
   if (!value) return 'Not yet'
@@ -33,6 +34,13 @@ export default function SettingsPage({ onRefresh }) {
     reviewLog: 0,
     writingLog: 0
   })
+  const [cloudCounts, setCloudCounts] = useState({
+    cards: 0,
+    decks: 0,
+    reviewLog: 0,
+    writingLog: 0
+  })
+  const [loadingCloudCounts, setLoadingCloudCounts] = useState(false)
 
   const fileInputRef = useRef(null)
 
@@ -41,12 +49,30 @@ export default function SettingsPage({ onRefresh }) {
     setLocalCounts(counts)
   }
 
+  const refreshCloudCounts = async () => {
+    setLoadingCloudCounts(true)
+
+    try {
+      const counts = await getCloudDataCounts()
+      setCloudCounts(counts)
+    } catch (err) {
+      setStatus(currentStatus => currentStatus ?? {
+        type: 'error',
+        message: 'Could not load cloud counts: ' + err.message
+      })
+    }
+
+    setLoadingCloudCounts(false)
+  }
+
   useEffect(() => {
     refreshLocalCounts()
+    refreshCloudCounts()
   }, [])
 
   useEffect(() => {
     refreshLocalCounts()
+    refreshCloudCounts()
   }, [lastSyncedAt, lastMigratedAt])
 
   const handleExport = async () => {
@@ -110,8 +136,14 @@ export default function SettingsPage({ onRefresh }) {
     if (result?.error) {
       setStatus({ type: 'error', message: result.error.message })
     } else if (!result?.skipped) {
-      setStatus({ type: 'success', message: 'Cloud sync complete.' })
+      setStatus({
+        type: 'success',
+        message: result.localSnapshotPromoted
+          ? 'Cloud sync complete. This device had more cards than the cloud, so its full local library was uploaded once.'
+          : 'Cloud sync complete.'
+      })
       await refreshLocalCounts()
+      await refreshCloudCounts()
       onRefresh?.()
     }
 
@@ -132,6 +164,7 @@ export default function SettingsPage({ onRefresh }) {
         message: `Uploaded local data to the cloud: ${counts.cards} cards, ${counts.decks} decks, ${counts.reviewLog} reviews, ${counts.writingLog} writing logs.`
       })
       await refreshLocalCounts()
+      await refreshCloudCounts()
       onRefresh?.()
     }
 
@@ -191,6 +224,15 @@ export default function SettingsPage({ onRefresh }) {
           </div>
         </div>
 
+        <div className="card" style={{ padding: 14, marginBottom: 12, background: 'var(--bg-elevated)' }}>
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
+            Cloud currently holds {loadingCloudCounts ? '(checking...)' : ''}
+          </div>
+          <div className="text-secondary" style={{ fontSize: 13, lineHeight: 1.6 }}>
+            {cloudCounts.cards} cards, {cloudCounts.decks} decks, {cloudCounts.reviewLog} reviews, {cloudCounts.writingLog} writing logs
+          </div>
+        </div>
+
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button
             className="btn btn-primary btn-sm"
@@ -210,7 +252,11 @@ export default function SettingsPage({ onRefresh }) {
         </div>
 
         <p className="text-secondary" style={{ fontSize: 12, marginTop: 12, lineHeight: 1.5 }}>
-          Use the upload button once on each old device that already has local study data. It merges this browser&apos;s local records into your account.
+          `Sync Now` is the normal everyday button: it pulls cloud changes down, then uploads local changes from this device.
+          `Upload Local Data to Cloud` is the repair button for old devices or restored backups. It forces this device&apos;s full local library into the cloud, even records that were already marked clean.
+        </p>
+        <p className="text-secondary" style={{ fontSize: 12, marginTop: 8, lineHeight: 1.5 }}>
+          If this device clearly has more cards than the cloud, the latest app now performs that full upload automatically once during normal sync.
         </p>
       </div>
 

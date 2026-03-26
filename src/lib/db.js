@@ -334,6 +334,71 @@ export async function bulkImportCards(deckId, wordsArray, tags = []) {
   return cards.length
 }
 
+function buildCardSignature({ character, pinyin = '', meaning = '' }) {
+  return JSON.stringify([
+    character.trim(),
+    pinyin.trim(),
+    meaning.trim()
+  ])
+}
+
+export async function repairDeckCards(deckId, wordsArray, tags = []) {
+  const now = nowIso()
+  const deck = deckId ? await db.decks.get(deckId) : null
+  const deckSyncId = deck?.syncId || null
+
+  const existingCards = await db.cards.toArray()
+  const existingSignatures = new Set(
+    existingCards
+      .filter(isActiveRecord)
+      .filter(card => card.deckId === deckId)
+      .map(card => buildCardSignature(card))
+  )
+
+  const missingCards = wordsArray
+    .filter(word => !existingSignatures.has(buildCardSignature(word)))
+    .map(word => ({
+      syncId: createSyncId(),
+      character: word.character,
+      pinyin: word.pinyin || '',
+      meaning: word.meaning || '',
+      examples: normalizeExamples(word.examples),
+      deckId,
+      deckSyncId,
+      tags: normalizeTags(tags),
+      notes: '',
+      interval: 0,
+      repetitions: 0,
+      easeFactor: 2.5,
+      nextReview: now,
+      lastReview: null,
+      writingScore: null,
+      writingCount: 0,
+      createdAt: now,
+      updatedAt: now,
+      deletedAt: null,
+      dirty: true,
+      suspended: false
+    }))
+
+  if (!missingCards.length) {
+    return {
+      addedCount: 0,
+      totalCount: existingSignatures.size
+    }
+  }
+
+  const batchSize = 100
+  for (let index = 0; index < missingCards.length; index += batchSize) {
+    await db.cards.bulkAdd(missingCards.slice(index, index + batchSize))
+  }
+
+  return {
+    addedCount: missingCards.length,
+    totalCount: existingSignatures.size + missingCards.length
+  }
+}
+
 export async function getDeckByName(name) {
   const deck = await db.decks.where('name').equals(name).first()
   return isActiveRecord(deck) ? deck : null

@@ -17,6 +17,8 @@ A single-owner Chinese study PWA with spaced repetition review, Hanzi writing pr
 - Dexie remains the local cache and offline-friendly layer.
 - Review and writing screens can deep-link the current word into Pleco on mobile.
 - Auth session validation is deferred outside Supabase auth-event callbacks to avoid client deadlocks during session restore.
+- If a device has more local study data than the cloud and has never done a full migration upload, the sync layer now auto-promotes that fuller local library once.
+- Prebuilt decks can now be repaired in-place if a device has only a partial local import.
 - Encrypted backups use a separate backup password and are still useful as an extra recovery path.
 
 ## Setup

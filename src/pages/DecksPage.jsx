@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getDecksWithCounts, createDeck, bulkImportCards, getDeckByName } from '../lib/db'
+import { getDecksWithCounts, createDeck, bulkImportCards, getDeckByName, repairDeckCards } from '../lib/db'
 import { hsk5Words } from '../data/hsk5'
 
 const PREBUILT_DECKS = [
@@ -18,6 +18,7 @@ export default function DecksPage({ onRefresh }) {
   const [decks, setDecks] = useState([])
   const [loading, setLoading] = useState(true)
   const [importing, setImporting] = useState(null) // which deck is importing
+  const [repairing, setRepairing] = useState(null) // which deck is repairing
   const [imported, setImported] = useState(null) // which deck was just imported
   const [error, setError] = useState(null)
 
@@ -55,6 +56,37 @@ export default function DecksPage({ onRefresh }) {
       setError(`Failed to import: ${err.message}`)
     } finally {
       setImporting(null)
+    }
+  }
+
+  const handleRepair = async (prebuilt) => {
+    setError(null)
+
+    const existing = await getDeckByName(prebuilt.name)
+    if (!existing) {
+      setError(`"${prebuilt.name}" deck is not on this device yet.`)
+      return
+    }
+
+    setRepairing(prebuilt.id)
+
+    try {
+      const result = await repairDeckCards(existing.id, prebuilt.words, prebuilt.tags)
+      await loadDecks()
+      onRefresh()
+
+      if (result.addedCount > 0) {
+        setImported(prebuilt.id)
+        setError(`Repaired "${prebuilt.name}" by adding ${result.addedCount} missing cards.`)
+        setTimeout(() => setImported(null), 3000)
+      } else {
+        setError(`"${prebuilt.name}" is already complete on this device.`)
+      }
+    } catch (err) {
+      console.error('Repair error:', err)
+      setError(`Failed to repair deck: ${err.message}`)
+    } finally {
+      setRepairing(null)
     }
   }
 
@@ -112,9 +144,13 @@ export default function DecksPage({ onRefresh }) {
         )}
 
         {PREBUILT_DECKS.map(prebuilt => {
-          const alreadyImported = decks.some(d => d.name === prebuilt.name)
+          const matchingDeck = decks.find(d => d.name === prebuilt.name)
+          const alreadyImported = Boolean(matchingDeck)
           const isImporting = importing === prebuilt.id
+          const isRepairing = repairing === prebuilt.id
           const justImported = imported === prebuilt.id
+          const missingCount = matchingDeck ? Math.max(prebuilt.words.length - matchingDeck.cardCount, 0) : 0
+          const needsRepair = alreadyImported && missingCount > 0
 
           return (
             <div key={prebuilt.id} className="card" style={{
@@ -129,21 +165,42 @@ export default function DecksPage({ onRefresh }) {
                   <div className="text-muted" style={{ fontSize: 13 }}>
                     {prebuilt.description}
                   </div>
+                  {needsRepair && (
+                    <div style={{ fontSize: 12, color: 'var(--warning)', marginTop: 6 }}>
+                      {matchingDeck.cardCount} of {prebuilt.words.length} cards on this device.
+                      {` ${missingCount} missing.`}
+                    </div>
+                  )}
                 </div>
-                <button
-                  className={`btn btn-sm ${justImported ? 'btn-secondary' : alreadyImported ? 'btn-ghost' : 'btn-primary'}`}
-                  onClick={() => handleImport(prebuilt)}
-                  disabled={isImporting || alreadyImported}
-                  style={{
-                    padding: '8px 16px', fontSize: 13, flexShrink: 0,
-                    opacity: alreadyImported ? 0.5 : 1,
-                    background: justImported ? 'var(--success)' : undefined
-                  }}
-                >
-                  {isImporting ? 'Importing...' :
-                   justImported ? 'Added!' :
-                   alreadyImported ? 'Added' : 'Add'}
-                </button>
+                {needsRepair ? (
+                  <button
+                    className="btn btn-primary btn-sm"
+                    onClick={() => handleRepair(prebuilt)}
+                    disabled={isRepairing}
+                    style={{
+                      padding: '8px 16px',
+                      fontSize: 13,
+                      flexShrink: 0
+                    }}
+                  >
+                    {isRepairing ? 'Repairing...' : `Repair (${missingCount})`}
+                  </button>
+                ) : (
+                  <button
+                    className={`btn btn-sm ${justImported ? 'btn-secondary' : alreadyImported ? 'btn-ghost' : 'btn-primary'}`}
+                    onClick={() => handleImport(prebuilt)}
+                    disabled={isImporting || alreadyImported}
+                    style={{
+                      padding: '8px 16px', fontSize: 13, flexShrink: 0,
+                      opacity: alreadyImported ? 0.5 : 1,
+                      background: justImported ? 'var(--success)' : undefined
+                    }}
+                  >
+                    {isImporting ? 'Importing...' :
+                     justImported ? 'Added!' :
+                     alreadyImported ? 'Added' : 'Add'}
+                  </button>
+                )}
               </div>
             </div>
           )

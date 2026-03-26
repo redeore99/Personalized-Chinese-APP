@@ -91,6 +91,9 @@ These external systems matter after code changes:
 - App stays on "Checking your session"
   Redeploy the latest code, then fully close and reopen the installed PWA or refresh the browser tab so the updated auth bootstrap is loaded.
 - Cloud sync is missing old cards
-  Open the old device or browser, sign in there, and run `Upload Local Data to Cloud`.
+  Open the old device or browser and sign in there.
+  Check Settings -> Cloud Sync to compare this device counts vs cloud counts.
+  The latest app will auto-upload a fuller local library once if this device has more cards than the cloud.
+  If the counts still differ after `Sync Now`, run `Upload Local Data to Cloud`.
 - Repo changes are live in GitHub but not in production
   Make sure Vercel redeployed the latest commit and that env var changes were applied to a fresh deployment.

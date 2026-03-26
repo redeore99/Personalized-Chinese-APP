@@ -1,4 +1,4 @@
-import { db, getLocalDataCounts, setMetaValue } from './db'
+import { db, getLocalDataCounts, getMetaValue, setMetaValue } from './db'
 import { isSupabaseConfigured, supabase } from './supabase'
 
 const REMOTE_FETCH_LIMIT = 5000
@@ -89,6 +89,35 @@ async function fetchRemoteTable(tableName) {
   }
 
   return data || []
+}
+
+async function countRemoteTable(tableName) {
+  requireSupabase()
+
+  const { count, error } = await supabase
+    .from(tableName)
+    .select('*', { count: 'exact', head: true })
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return count || 0
+}
+
+async function countRemoteActiveTable(tableName) {
+  requireSupabase()
+
+  const { count, error } = await supabase
+    .from(tableName)
+    .select('*', { count: 'exact', head: true })
+    .is('deleted_at', null)
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return count || 0
 }
 
 async function upsertRemoteDecks(rows) {
@@ -323,14 +352,36 @@ export async function syncWithCloud(userId) {
     throw new Error('Cannot sync without an authenticated user.')
   }
 
-  const pullResult = await pullFromCloud()
-  const pushResult = await pushRowsToCloud(userId)
+  const [hasMigratedBefore, pullResult] = await Promise.all([
+    getMetaValue(`cloud:lastMigration:${userId}`),
+    pullFromCloud()
+  ])
+
+  const localCounts = await getLocalDataCounts()
+  const pulledCounts = pullResult.pulled
+  const shouldPromoteLocalSnapshot = !hasMigratedBefore && (
+    localCounts.cards > pulledCounts.cards ||
+    localCounts.decks > pulledCounts.decks ||
+    localCounts.reviewLog > pulledCounts.reviewLogs ||
+    localCounts.writingLog > pulledCounts.writingLogs
+  )
+
+  const pushResult = shouldPromoteLocalSnapshot
+    ? await pushRowsToCloud(userId, { includeClean: true })
+    : await pushRowsToCloud(userId)
+
   const syncedAt = new Date().toISOString()
 
   await setMetaValue(`cloud:lastSync:${userId}`, syncedAt)
+  if (shouldPromoteLocalSnapshot) {
+    await setMetaValue(`cloud:lastMigration:${userId}`, syncedAt)
+  }
 
   return {
     syncedAt,
+    migratedAt: shouldPromoteLocalSnapshot ? syncedAt : null,
+    localSnapshotPromoted: shouldPromoteLocalSnapshot,
+    localCounts,
     ...pullResult,
     ...pushResult
   }
@@ -354,5 +405,23 @@ export async function migrateLocalDataToCloud(userId) {
     migratedAt,
     localCounts,
     ...pushResult
+  }
+}
+
+export async function getCloudDataCounts() {
+  requireSupabase()
+
+  const [decks, cards, reviewLog, writingLog] = await Promise.all([
+    countRemoteActiveTable('decks'),
+    countRemoteActiveTable('cards'),
+    countRemoteTable('review_logs'),
+    countRemoteTable('writing_logs')
+  ])
+
+  return {
+    decks,
+    cards,
+    reviewLog,
+    writingLog
   }
 }

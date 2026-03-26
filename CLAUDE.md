@@ -34,7 +34,7 @@ The old local PIN lock system has been removed. Do not describe it as the curren
 - `src/contexts/AuthContext.jsx`
   Loads the Supabase session, signs in with email/password, signs out, rejects unauthorized accounts, and defers Supabase auth-event work outside the auth callback to avoid deadlocks.
 - `src/contexts/SyncContext.jsx`
-  Runs cloud sync on login, on focus, every 30 seconds, and on manual actions from Settings.
+  Runs cloud sync on login, on focus, every 30 seconds, restores saved sync timestamps, and exposes manual sync and full-upload actions from Settings.
 - `src/lib/supabase.js`
   Creates the client with `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`.
   It also accepts legacy `VITE_SUPABASE_ANON_KEY` as a fallback.
@@ -43,7 +43,7 @@ The old local PIN lock system has been removed. Do not describe it as the curren
 - `src/lib/db.js`
   Dexie schema plus local CRUD helpers. Local records carry sync metadata such as `syncId`, `updatedAt`, `dirty`, and `deletedAt`.
 - `src/lib/sync.js`
-  Pulls remote rows into Dexie and pushes dirty local rows back to Supabase.
+  Pulls remote rows into Dexie, pushes dirty local rows to Supabase, can report cloud counts, and auto-promotes a fuller local library once if this device has more data than the cloud.
 - `src/lib/backup.js`
   Encrypted export and restore for the local cache using a separate backup password.
 - `src/pages/SettingsPage.jsx`
@@ -116,6 +116,8 @@ Working now:
 - local Dexie cache for normal app reads and offline-friendly behavior
 - Pleco deep-link lookup from active review and writing sessions on mobile
 - manual `Sync Now` and `Upload Local Data to Cloud` actions
+- cloud vs local counts visible in Settings for sync troubleshooting
+- prebuilt deck repair when a device has only a partial local import
 - encrypted local backup export/import with a separate backup password
 - mobile-friendly PWA deployment on Vercel
 
