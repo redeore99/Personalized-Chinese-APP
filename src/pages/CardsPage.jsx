@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
+  bulkDeleteCards,
   DECK_FILTER_UNASSIGNED,
   deleteCard,
   getCardLibrary,
@@ -72,6 +73,8 @@ export default function CardsPage({ onRefresh }) {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
+  const [selectionMode, setSelectionMode] = useState(false)
+  const [selectedCardIds, setSelectedCardIds] = useState([])
 
   async function loadDecks() {
     const deckOptions = await getDeckOptions()
@@ -89,6 +92,7 @@ export default function CardsPage({ onRefresh }) {
 
     setCards(library.cards)
     setSummary(library.summary)
+    setSelectedCardIds(prev => prev.filter(id => library.cards.some(card => card.id === id)))
 
     if (!library.cards.length) {
       setSelectedCardId(null)
@@ -117,6 +121,16 @@ export default function CardsPage({ onRefresh }) {
   const selectedCard = cards.find(card => card.id === selectedCardId) || null
 
   const handleSelectCard = card => {
+    if (selectionMode) {
+      setSelectedCardIds(prev => (
+        prev.includes(card.id)
+          ? prev.filter(id => id !== card.id)
+          : [...prev, card.id]
+      ))
+      setMessage('')
+      return
+    }
+
     setSelectedCardId(card.id)
     setEditor(buildEditorState(card))
     setMessage('')
@@ -166,7 +180,38 @@ export default function CardsPage({ onRefresh }) {
     setSaving(false)
   }
 
+  const handleBulkDelete = async () => {
+    if (!selectedCardIds.length) {
+      return
+    }
+
+    const shouldDelete = window.confirm(
+      `Delete ${selectedCardIds.length} selected card${selectedCardIds.length === 1 ? '' : 's'}? This change will sync to your other devices.`
+    )
+    if (!shouldDelete) {
+      return
+    }
+
+    setSaving(true)
+    setMessage('')
+    const result = await bulkDeleteCards(selectedCardIds)
+
+    if (!result.deletedCount) {
+      setSaving(false)
+      setMessage('Could not delete those cards locally. Refresh the page and try again.')
+      return
+    }
+
+    setSelectedCardIds([])
+    setSelectionMode(false)
+    await loadCards()
+    onRefresh()
+    setMessage(`Deleted ${result.deletedCount} card${result.deletedCount === 1 ? '' : 's'}.`)
+    setSaving(false)
+  }
+
   const hasActiveFilters = Boolean(search.trim()) || deckFilter !== 'all' || status !== 'all' || sort !== 'updated'
+  const selectedCardIdSet = new Set(selectedCardIds)
 
   return (
     <div className="page">
@@ -274,10 +319,52 @@ export default function CardsPage({ onRefresh }) {
         <div className="card library-list-panel">
           <div className="section-heading-row">
             <h3 className="section-heading">Library</h3>
-            <span className="text-muted" style={{ fontSize: 13 }}>
-              {summary.total} card{summary.total === 1 ? '' : 's'}
-            </span>
+            <div className="selection-toolbar">
+              <span className="text-muted" style={{ fontSize: 13 }}>
+                {summary.total} card{summary.total === 1 ? '' : 's'}
+              </span>
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={() => {
+                  setSelectionMode(prev => !prev)
+                  setSelectedCardIds([])
+                }}
+              >
+                {selectionMode ? 'Done' : 'Select'}
+              </button>
+              {selectionMode && (
+                <>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => setSelectedCardIds(cards.map(card => card.id))}
+                    disabled={!cards.length}
+                  >
+                    Select Visible
+                  </button>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => setSelectedCardIds([])}
+                    disabled={!selectedCardIds.length}
+                  >
+                    Clear
+                  </button>
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    onClick={handleBulkDelete}
+                    disabled={saving || !selectedCardIds.length}
+                  >
+                    Delete Selected ({selectedCardIds.length})
+                  </button>
+                </>
+              )}
+            </div>
           </div>
+
+          {selectionMode && (
+            <div className="text-secondary" style={{ fontSize: 13, marginBottom: 12 }}>
+              Selection mode is on. Tap visible cards to select them, then delete them in one sync-safe batch.
+            </div>
+          )}
 
           {loading ? (
             <p className="text-secondary">Loading cards...</p>
@@ -291,28 +378,38 @@ export default function CardsPage({ onRefresh }) {
           ) : (
             <div className="library-list">
               {cards.map(card => (
-                <button
-                  key={card.id}
-                  className={`library-row ${card.id === selectedCardId ? 'active' : ''}`}
-                  onClick={() => handleSelectCard(card)}
-                >
-                  <div className="library-row-main">
-                    <div className="char-display" style={{ fontSize: 28, minWidth: 48 }}>{card.character}</div>
-                    <div className="library-row-copy">
-                      <div className="library-row-title">
-                        <span>{card.pinyin || 'No pinyin yet'}</span>
-                        <span className={`badge badge-${card.status}`}>{card.statusLabel}</span>
-                      </div>
-                      <div className="text-secondary" style={{ fontSize: 14 }}>
-                        {card.meaning || 'No meaning yet'}
-                      </div>
-                      <div className="library-row-meta">
-                        <span>{card.deckName || 'Standalone'}</span>
-                        <span>Next: {formatDateTime(card.nextReview)}</span>
+                <div key={card.id} className="library-row-shell">
+                  {selectionMode && (
+                    <label className="library-row-check">
+                      <input
+                        type="checkbox"
+                        checked={selectedCardIdSet.has(card.id)}
+                        onChange={() => handleSelectCard(card)}
+                      />
+                    </label>
+                  )}
+                  <button
+                    className={`library-row ${card.id === selectedCardId ? 'active' : ''} ${selectedCardIdSet.has(card.id) ? 'selected' : ''}`}
+                    onClick={() => handleSelectCard(card)}
+                  >
+                    <div className="library-row-main">
+                      <div className="char-display" style={{ fontSize: 28, minWidth: 48 }}>{card.character}</div>
+                      <div className="library-row-copy">
+                        <div className="library-row-title">
+                          <span>{card.pinyin || 'No pinyin yet'}</span>
+                          <span className={`badge badge-${card.status}`}>{card.statusLabel}</span>
+                        </div>
+                        <div className="text-secondary" style={{ fontSize: 14 }}>
+                          {card.meaning || 'No meaning yet'}
+                        </div>
+                        <div className="library-row-meta">
+                          <span>{card.deckName || 'Standalone'}</span>
+                          <span>Next: {formatDateTime(card.nextReview)}</span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </button>
+                  </button>
+                </div>
               ))}
             </div>
           )}

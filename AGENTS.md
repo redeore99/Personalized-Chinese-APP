@@ -47,9 +47,9 @@ The old local PIN lock system has been removed. Do not describe it as the curren
 - `src/lib/pleco.js`
   Builds Pleco deep-link URLs and detects whether the current device looks mobile enough to offer the live app shortcut.
 - `src/lib/plecoImport.js`
-  Parses Pleco `.txt` exports for linked manual refresh, unions repeated rows into unique cards, maps one primary Pleco category to the target deck, and keeps extra categories as tags.
+  Parses Pleco `.txt` exports for linked manual refresh, unions repeated rows into unique cards, maps one primary Pleco category to the target deck, keeps extra categories as tags, and ignores suspicious category values that look like full flashcard text.
 - `src/lib/db.js`
-  Dexie schema plus local CRUD helpers. It now stores richer deck metadata, supports card browsing/editing queries, refreshes linked Pleco decks without destructive overwrites or duplicate cards across repeated device exports, and exposes recent study activity helpers alongside the sync metadata fields such as `syncId`, `updatedAt`, `dirty`, and `deletedAt`.
+  Dexie schema plus local CRUD helpers. It now stores richer deck metadata, supports card browsing/editing queries, refreshes linked Pleco decks without destructive overwrites or duplicate cards across repeated device exports, bulk-deletes cards through tombstones, bulk-deletes decks by tombstoning the deck while detaching cards to standalone, and exposes recent study activity helpers alongside the sync metadata fields such as `syncId`, `updatedAt`, `dirty`, and `deletedAt`.
 - `src/lib/sync.js`
   Pulls remote rows into Dexie, pushes dirty local rows to Supabase, can report cloud counts, automatically runs a full-library reconcile when local and cloud counts still disagree, treats deletions as tombstones so stale undeleted rows do not resurrect records, and falls back to the legacy deck shape until the latest Supabase deck columns have been applied.
 - `src/lib/backup.js`
@@ -57,9 +57,9 @@ The old local PIN lock system has been removed. Do not describe it as the curren
 - `src/pages/HomePage.jsx`
   Dashboard with due counts, today activity, recent review/writing history, and deck focus cards.
 - `src/pages/CardsPage.jsx`
-  Library browser with search, deck/status filters, and lightweight card editing including deck reassignment.
+  Library browser with search, deck/status filters, lightweight card editing including deck reassignment, and bulk card selection/deletion.
 - `src/pages/DecksPage.jsx`
-  Deck management view with custom deck creation, per-deck summaries, prebuilt repair, and direct browse/review actions.
+  Deck management view with custom deck creation, per-deck summaries, prebuilt repair, direct browse/review actions, and bulk deck cleanup that preserves cards as standalone.
 - `src/pages/AddCardPage.jsx`
   Card creation form with deck assignment at save time.
 - `src/pages/SettingsPage.jsx`
@@ -137,11 +137,13 @@ Working now:
 - local Dexie cache for normal app reads and offline-friendly behavior
 - structured deck metadata for custom vs prebuilt organization
 - card browse/search/edit UI with deck reassignment
+- bulk card deletion from the library browser
 - manual cards can be filed into a deck on creation
 - home dashboard recent activity and deck focus summaries
 - deck-specific browse/review entry points
+- bulk deck deletion that preserves cards as standalone for safer cleanup
 - Pleco deep-link lookup from active review and writing sessions on mobile
-- manual Pleco `.txt` linked refresh that unions unique cards across repeated exports, fills missing pinyin or meaning when possible, and keeps extra Pleco categories as tags instead of duplicating cards
+- manual Pleco `.txt` linked refresh that unions unique cards across repeated exports, fills missing pinyin or meaning when possible, keeps extra Pleco categories as tags instead of duplicating cards, and ignores suspicious category values that would otherwise create bogus empty decks
 - manual `Sync Now` with automatic full reconcile when counts drift
 - cloud vs local counts visible in Settings for sync troubleshooting
 - prebuilt deck repair when a device has only a partial local import

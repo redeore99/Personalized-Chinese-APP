@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
+  bulkDeleteDecks,
   DECK_FILTER_UNASSIGNED,
   bulkImportCards,
   createDeck,
@@ -20,8 +21,11 @@ export default function DecksPage({ onRefresh }) {
   const [repairing, setRepairing] = useState(null)
   const [imported, setImported] = useState(null)
   const [error, setError] = useState(null)
+  const [message, setMessage] = useState(null)
   const [newDeckName, setNewDeckName] = useState('')
   const [creatingDeck, setCreatingDeck] = useState(false)
+  const [selectionMode, setSelectionMode] = useState(false)
+  const [selectedDeckIds, setSelectedDeckIds] = useState([])
 
   async function loadDeckData() {
     const [deckList, standalone] = await Promise.all([
@@ -31,6 +35,7 @@ export default function DecksPage({ onRefresh }) {
 
     setDecks(deckList)
     setStandaloneSummary(standalone)
+    setSelectedDeckIds(prev => prev.filter(id => deckList.some(deck => deck.id === id)))
     setLoading(false)
   }
 
@@ -43,6 +48,7 @@ export default function DecksPage({ onRefresh }) {
     if (!name) return
 
     setError(null)
+    setMessage(null)
     setCreatingDeck(true)
 
     try {
@@ -66,6 +72,7 @@ export default function DecksPage({ onRefresh }) {
 
   const handleImport = async prebuilt => {
     setError(null)
+    setMessage(null)
 
     const existing = await getDeckByName(prebuilt.name)
     if (existing) {
@@ -100,6 +107,7 @@ export default function DecksPage({ onRefresh }) {
 
   const handleRepair = async prebuilt => {
     setError(null)
+    setMessage(null)
 
     const existing = await getDeckByName(prebuilt.name)
     if (!existing) {
@@ -126,6 +134,36 @@ export default function DecksPage({ onRefresh }) {
       setError(`Failed to repair deck: ${err.message}`)
     } finally {
       setRepairing(null)
+    }
+  }
+
+  const handleBulkDeleteDecks = async () => {
+    if (!selectedDeckIds.length) {
+      return
+    }
+
+    const shouldDelete = window.confirm(
+      `Delete ${selectedDeckIds.length} selected deck${selectedDeckIds.length === 1 ? '' : 's'}? Cards inside them will stay in your library as standalone cards, and the change will sync to your other devices.`
+    )
+    if (!shouldDelete) {
+      return
+    }
+
+    setError(null)
+    setMessage(null)
+
+    try {
+      const result = await bulkDeleteDecks(selectedDeckIds)
+      setSelectedDeckIds([])
+      setSelectionMode(false)
+      await loadDeckData()
+      onRefresh()
+      setMessage(
+        `Deleted ${result.deletedDeckCount} deck${result.deletedDeckCount === 1 ? '' : 's'} and kept ${result.detachedCardCount} card${result.detachedCardCount === 1 ? '' : 's'} as standalone.`
+      )
+    } catch (err) {
+      console.error('Bulk deck delete error:', err)
+      setError(`Failed to delete selected decks: ${err.message}`)
     }
   }
 
@@ -177,13 +215,68 @@ export default function DecksPage({ onRefresh }) {
         </div>
       )}
 
+      {message && (
+        <div className="card-message card-message-success" style={{ marginBottom: 16 }}>
+          {message}
+        </div>
+      )}
+
       <section className="card" style={{ marginBottom: 20 }}>
         <div className="section-heading-row">
           <h3 className="section-heading">Your Study Library</h3>
-          <button className="btn btn-ghost btn-sm" onClick={() => navigate('/add')}>
-            + Add card
-          </button>
+          <div className="selection-toolbar">
+            <button className="btn btn-ghost btn-sm" onClick={() => navigate('/add')}>
+              + Add card
+            </button>
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => {
+                setSelectionMode(prev => !prev)
+                setSelectedDeckIds([])
+              }}
+            >
+              {selectionMode ? 'Done' : 'Select'}
+            </button>
+            {selectionMode && (
+              <>
+                <button
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => setSelectedDeckIds(decks.map(deck => deck.id))}
+                  disabled={!decks.length}
+                >
+                  Select All
+                </button>
+                <button
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => setSelectedDeckIds(decks.filter(deck => deck.cardCount === 0).map(deck => deck.id))}
+                  disabled={!decks.some(deck => deck.cardCount === 0)}
+                >
+                  Select Empty
+                </button>
+                <button
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => setSelectedDeckIds([])}
+                  disabled={!selectedDeckIds.length}
+                >
+                  Clear
+                </button>
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={handleBulkDeleteDecks}
+                  disabled={!selectedDeckIds.length}
+                >
+                  Delete Selected ({selectedDeckIds.length})
+                </button>
+              </>
+            )}
+          </div>
         </div>
+
+        {selectionMode && (
+          <div className="text-secondary" style={{ fontSize: 13, marginBottom: 12 }}>
+            Select empty decks to clean up stray Pleco imports, or select any decks you want to remove. Their cards will be preserved as standalone cards.
+          </div>
+        )}
 
         {standaloneSummary?.cardCount > 0 && (
           <DeckCard
@@ -191,6 +284,9 @@ export default function DecksPage({ onRefresh }) {
             onBrowse={() => navigate(`/cards?deck=${DECK_FILTER_UNASSIGNED}`)}
             onReview={() => navigate(`/review?deck=${DECK_FILTER_UNASSIGNED}`)}
             onAddCard={() => navigate('/add')}
+            selectionMode={false}
+            selected={false}
+            onToggleSelect={() => {}}
           />
         )}
 
@@ -209,6 +305,13 @@ export default function DecksPage({ onRefresh }) {
               onBrowse={() => navigate(`/cards?deck=${deck.id}`)}
               onReview={() => navigate(`/review?deck=${deck.id}`)}
               onAddCard={() => navigate(`/add?deck=${deck.id}`)}
+              selectionMode={selectionMode}
+              selected={selectedDeckIds.includes(deck.id)}
+              onToggleSelect={() => setSelectedDeckIds(prev => (
+                prev.includes(deck.id)
+                  ? prev.filter(id => id !== deck.id)
+                  : [...prev, deck.id]
+              ))}
             />
           ))
         )}
@@ -279,12 +382,21 @@ export default function DecksPage({ onRefresh }) {
   )
 }
 
-function DeckCard({ deck, onBrowse, onReview, onAddCard }) {
+function DeckCard({ deck, onBrowse, onReview, onAddCard, selectionMode, selected, onToggleSelect }) {
   return (
-    <div className="deck-card">
+    <div className={`deck-card ${selected ? 'deck-card-selected' : ''}`}>
       <div className="deck-card-top">
         <div>
           <div className="deck-focus-title-row">
+            {selectionMode && !deck.standalone && (
+              <label className="deck-select-check">
+                <input
+                  type="checkbox"
+                  checked={selected}
+                  onChange={onToggleSelect}
+                />
+              </label>
+            )}
             <h4 style={{ fontSize: 18, fontWeight: 600 }}>{deck.name}</h4>
             <span className={`badge badge-${deck.kind || 'neutral'}`}>{deck.kind || 'deck'}</span>
           </div>

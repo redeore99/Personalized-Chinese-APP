@@ -17,10 +17,11 @@ A single-owner Chinese study PWA with spaced repetition review, Hanzi writing pr
 - Dexie remains the local cache and offline-friendly layer.
 - Decks now carry structured metadata such as `slug`, `kind`, `sourceKey`, `description`, `color`, and `sortOrder` so the library can grow beyond a flat deck-name list.
 - Manual cards can be assigned directly to a deck at creation time and moved later from the new library browser.
-- The app now has a dedicated card-library screen for search, filtering, and lightweight editing.
+- The app now has a dedicated card-library screen for search, filtering, lightweight editing, and bulk card deletion.
+- The decks screen now supports bulk deck cleanup too. Deleting a deck keeps its cards as standalone cards instead of deleting study data.
 - Home now shows recent review and writing activity plus deck-level focus summaries.
 - Review and writing screens can deep-link the current word into Pleco on mobile.
-- Settings can now manually import or refresh Pleco `.txt` exports. Repeated refreshes union unique cards, avoid duplicates across repeated device exports, preserve existing local study data, and keep extra Pleco categories as tags when the same card appears in multiple categories.
+- Settings can now manually import or refresh Pleco `.txt` exports. Repeated refreshes union unique cards, avoid duplicates across repeated device exports, preserve existing local study data, keep extra Pleco categories as tags when the same card appears in multiple categories, and ignore suspicious “category” values so full flashcard text does not turn into bogus empty decks.
 - The installed PWA now registers updates eagerly and reloads when a new service worker takes control, so mobile should pick up fresh deployments more reliably.
 - Auth session validation is deferred outside Supabase auth-event callbacks to avoid client deadlocks during session restore.
 - The sign-in form now requires a Cloudflare Turnstile check and still applies a device-local cooldown after repeated failed password attempts. Keep Supabase CAPTCHA enabled too, since that is the server-side defense that actually verifies the token.

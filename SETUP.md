@@ -61,7 +61,17 @@ VITE_TURNSTILE_SITE_KEY=1x00000000000000000000AA
    - Repeated refreshes skip duplicates and can fill in missing pinyin or meaning on existing cards.
    - Cards are never deleted just because they are missing from a later Pleco export.
    - If the same Pleco card appears in multiple categories, the app keeps one card, uses one primary deck, and stores the extra Pleco categories as tags.
+   - If a supposed Pleco category looks like full flashcard text instead of a real deck name, the app now ignores that category and falls back to the shared `Pleco Import` deck rather than creating bogus empty decks.
 6. Run `Sync Now` if you want the refreshed cards uploaded to Supabase for your other devices.
+
+## Managing Cards And Decks
+- Cards
+  In `Cards`, use `Select` to choose visible cards and `Delete Selected` to remove them in one batch.
+  Bulk card deletion uses the same sync tombstone path as single-card deletion, so the deletion can propagate safely to your other devices.
+- Decks
+  In `Decks`, use `Select` and then `Delete Selected` to remove multiple decks at once.
+  Deleting a deck does not delete the cards inside it. Those cards stay in your library as standalone cards so study data is not lost.
+  `Select Empty` is the fastest cleanup path if a bad Pleco import created empty decks.
 
 ## Optional Local Development
 Local development is not required just to use the deployed app, but it is useful when making or testing code changes.
@@ -149,5 +159,9 @@ These external systems matter after code changes:
   The first Pleco category used for that card becomes the primary deck, while additional Pleco categories are saved as tags on that card.
   If multiple devices export overlapping Pleco cards, the app unions those cards safely instead of duplicating them across decks.
   If Pleco exported cards without category columns, the app groups them into a single `Pleco Import` deck.
+- Pleco import created empty decks with long card text as the deck name
+  Update to the latest build.
+  The parser now ignores suspicious category values that look like full flashcard text instead of real Pleco deck names.
+  To clean up old bad imports, open `Decks`, press `Select`, then `Select Empty`, and delete those empty decks in one batch.
 - Repo changes are live in GitHub but not in production
   Make sure Vercel redeployed the latest commit and that env var changes were applied to a fresh deployment.

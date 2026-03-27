@@ -46,6 +46,14 @@ function compareDecks(left, right) {
   )
 }
 
+function normalizeRecordIds(ids = []) {
+  return Array.from(new Set(
+    ids
+      .map(id => (Number.isFinite(Number(id)) ? Number(id) : id))
+      .filter(id => id !== null && id !== undefined && id !== '')
+  ))
+}
+
 function getCardStatus(card, now = nowIso()) {
   if (card.suspended) return 'suspended'
   if (card.repetitions === 0) return 'new'
@@ -556,6 +564,34 @@ export async function deleteCard(id) {
   return 1
 }
 
+export async function bulkDeleteCards(ids = []) {
+  const normalizedIds = normalizeRecordIds(ids)
+  if (!normalizedIds.length) {
+    return { deletedCount: 0 }
+  }
+
+  return db.transaction('rw', [db.cards], async () => {
+    const existingCards = await db.cards.bulkGet(normalizedIds)
+    const deletedAt = nowIso()
+    const cardsToDelete = existingCards
+      .filter(isActiveRecord)
+      .map(card => ({
+        ...card,
+        deletedAt,
+        updatedAt: deletedAt,
+        dirty: true
+      }))
+
+    if (cardsToDelete.length) {
+      await db.cards.bulkPut(cardsToDelete)
+    }
+
+    return {
+      deletedCount: cardsToDelete.length
+    }
+  })
+}
+
 export async function logReview(cardId, rating, intervalDays) {
   const reviewedAt = nowIso()
   const card = await db.cards.get(cardId)
@@ -616,6 +652,59 @@ export async function updateDeck(id, changes) {
     ...normalized,
     updatedAt: nowIso(),
     dirty: true
+  })
+}
+
+export async function bulkDeleteDecks(ids = []) {
+  const normalizedIds = normalizeRecordIds(ids)
+  if (!normalizedIds.length) {
+    return {
+      deletedDeckCount: 0,
+      detachedCardCount: 0
+    }
+  }
+
+  return db.transaction('rw', [db.decks, db.cards], async () => {
+    const existingDecks = await db.decks.bulkGet(normalizedIds)
+    const activeDecks = existingDecks.filter(isActiveRecord)
+    if (!activeDecks.length) {
+      return {
+        deletedDeckCount: 0,
+        detachedCardCount: 0
+      }
+    }
+
+    const deckIdSet = new Set(activeDecks.map(deck => deck.id))
+    const deletedAt = nowIso()
+    const activeCards = (await db.cards.toArray()).filter(isActiveRecord)
+    const cardsToDetach = activeCards
+      .filter(card => deckIdSet.has(card.deckId))
+      .map(card => ({
+        ...card,
+        deckId: null,
+        deckSyncId: null,
+        updatedAt: deletedAt,
+        dirty: true
+      }))
+    const decksToDelete = activeDecks.map(deck => ({
+      ...deck,
+      deletedAt,
+      updatedAt: deletedAt,
+      dirty: true
+    }))
+
+    if (cardsToDetach.length) {
+      await db.cards.bulkPut(cardsToDetach)
+    }
+
+    if (decksToDelete.length) {
+      await db.decks.bulkPut(decksToDelete)
+    }
+
+    return {
+      deletedDeckCount: decksToDelete.length,
+      detachedCardCount: cardsToDetach.length
+    }
   })
 }
 
@@ -1037,6 +1126,38 @@ export async function refreshPlecoLinkedDecks(plecoCards = []) {
       const batchSize = 100
       for (let index = 0; index < cardsToAdd.length; index += batchSize) {
         await db.cards.bulkAdd(cardsToAdd.slice(index, index + batchSize))
+      }
+    }
+
+    const emptyCreatedDeckIds = []
+    for (const deckId of createdDeckIds) {
+      const activeCardCount = (await db.cards.where('deckId').equals(deckId).toArray())
+        .filter(isActiveRecord)
+        .length
+
+      if (activeCardCount === 0) {
+        emptyCreatedDeckIds.push(deckId)
+      }
+    }
+
+    if (emptyCreatedDeckIds.length) {
+      const cleanedUpAt = nowIso()
+      const createdDecks = await db.decks.bulkGet(emptyCreatedDeckIds)
+      const decksToTombstone = createdDecks
+        .filter(isActiveRecord)
+        .map(deck => ({
+          ...deck,
+          deletedAt: cleanedUpAt,
+          updatedAt: cleanedUpAt,
+          dirty: true
+        }))
+
+      if (decksToTombstone.length) {
+        await db.decks.bulkPut(decksToTombstone)
+      }
+
+      for (const deckId of emptyCreatedDeckIds) {
+        createdDeckIds.delete(deckId)
       }
     }
 

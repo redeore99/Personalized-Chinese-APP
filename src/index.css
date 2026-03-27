@@ -550,11 +550,23 @@ textarea.input {
   margin-top: 12px;
 }
 
+.deck-card-selected {
+  border-color: rgba(56, 189, 248, 0.5);
+  background: rgba(56, 189, 248, 0.08);
+}
+
 .deck-card-top {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 14px;
+}
+
+.deck-select-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 8px;
 }
 
 .deck-card-count {
@@ -580,9 +592,29 @@ textarea.input {
   margin-top: 16px;
 }
 
+.selection-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .library-list-panel,
 .library-editor-panel {
   min-height: 100%;
+}
+
+.library-row-shell {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.library-row-check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .library-row {
@@ -598,6 +630,11 @@ textarea.input {
 .library-row.active {
   border-color: rgba(220, 38, 38, 0.55);
   background: rgba(220, 38, 38, 0.08);
+}
+
+.library-row.selected {
+  border-color: rgba(56, 189, 248, 0.5);
+  background: rgba(56, 189, 248, 0.08);
 }
 
 .library-row-main {

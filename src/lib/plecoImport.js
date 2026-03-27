@@ -87,6 +87,36 @@ function splitListValue(value) {
   )
 }
 
+function countWords(value) {
+  return sanitizeText(value)
+    .split(/\s+/)
+    .filter(Boolean)
+    .length
+}
+
+function looksLikeSuspiciousDeckName(value) {
+  const text = sanitizeText(value)
+  if (!text) {
+    return false
+  }
+
+  const containsSentencePunctuation = /[.?!。！？]/.test(text)
+  const containsLatin = /[A-Za-z]/.test(text)
+  const containsCjk = /[\u3400-\u9fff]/.test(text)
+  const wordCount = countWords(text)
+
+  return (
+    text.length > 60 ||
+    wordCount > 10 ||
+    containsSentencePunctuation ||
+    (containsLatin && containsCjk && text.length > 28)
+  )
+}
+
+function sanitizeCategoryNames(values) {
+  return uniqueValues(values).filter(value => !looksLikeSuspiciousDeckName(value))
+}
+
 function detectDelimiter(text) {
   const candidates = ['\t', ',', ';', '|']
   const sampleLines = text
@@ -260,7 +290,7 @@ function buildRowRecord(row, rowNumber, columnMap) {
     character,
     pinyin: readMappedValue(row, columnMap, 'pinyin'),
     meaning: readMappedValue(row, columnMap, 'meaning'),
-    categoryNames: splitListValue(readMappedValue(row, columnMap, 'deck')),
+    categoryNames: sanitizeCategoryNames(splitListValue(readMappedValue(row, columnMap, 'deck'))),
     tags: splitListValue(readMappedValue(row, columnMap, 'tags'))
   }
 }
@@ -311,7 +341,7 @@ function rememberAggregatedCard(record, lookupByKey, recordsByCharacter) {
 }
 
 function normalizeAggregatedCard(record, defaultDeckName) {
-  const categoryNames = uniqueValues(record.categoryNames)
+  const categoryNames = sanitizeCategoryNames(record.categoryNames)
   const primaryDeckName = categoryNames[0] || defaultDeckName
 
   return {
