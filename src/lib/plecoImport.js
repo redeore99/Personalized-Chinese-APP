@@ -134,6 +134,27 @@ function detectDelimiter(text) {
   return bestCandidate?.score > 0 ? bestCandidate.delimiter : '\t'
 }
 
+function countDelimiterOccurrences(line, delimiter) {
+  return line.split(delimiter).length - 1
+}
+
+function looksLikePlecoTabExport(text) {
+  const sampleLines = text
+    .split(/\r?\n/)
+    .map(line => String(line || '').replace(/\r/g, ''))
+    .map(line => sanitizeText(line))
+    .filter(Boolean)
+    .filter(line => !line.startsWith('//'))
+    .slice(0, 25)
+
+  if (!sampleLines.length) {
+    return false
+  }
+
+  const rowsWithTwoTabs = sampleLines.filter(line => countDelimiterOccurrences(line, '\t') >= 2).length
+  return rowsWithTwoTabs >= Math.max(3, Math.ceil(sampleLines.length * 0.6))
+}
+
 function parseDelimitedText(text, delimiter) {
   const rows = []
   let row = []
@@ -362,6 +383,121 @@ function validatePlecoTextFile(file) {
   }
 }
 
+function parsePlecoHeadword(value) {
+  const text = sanitizeText(value)
+  if (!text) {
+    return ''
+  }
+
+  const bracketIndex = text.indexOf('[')
+  return bracketIndex > 0 ? sanitizeText(text.slice(0, bracketIndex)) : text
+}
+
+function isSectionMarker(line) {
+  return sanitizeText(line).startsWith('//')
+}
+
+function readSectionName(line) {
+  return sanitizeText(line).replace(/^\/\/+\s*/, '')
+}
+
+function parsePlecoTabExportText(text, defaultDeckName) {
+  const lines = String(text || '').split(/\r?\n/)
+  const aggregatedCards = []
+  const lookupByKey = new Map()
+  const recordsByCharacter = new Map()
+  const deckNames = new Set()
+  let invalidRowCount = 0
+  let dataRowCount = 0
+  let currentDeckName = defaultDeckName
+
+  lines.forEach(rawLine => {
+    const trimmedLine = sanitizeText(rawLine)
+    if (!trimmedLine) {
+      return
+    }
+
+    if (isSectionMarker(trimmedLine)) {
+      currentDeckName = readSectionName(trimmedLine) || defaultDeckName
+      return
+    }
+
+    const columns = String(rawLine || '')
+      .replace(/\r/g, '')
+      .split('\t')
+      .map(value => sanitizeText(value))
+
+    if (columns.length < 2) {
+      invalidRowCount += 1
+      return
+    }
+
+    dataRowCount += 1
+
+    const record = {
+      character: parsePlecoHeadword(columns[0]),
+      pinyin: columns[1] || '',
+      meaning: sanitizeText(columns.slice(2).join(' ')),
+      categoryNames: currentDeckName && currentDeckName !== defaultDeckName ? [currentDeckName] : [],
+      tags: []
+    }
+
+    if (!record.character) {
+      invalidRowCount += 1
+      return
+    }
+
+    deckNames.add(currentDeckName || defaultDeckName)
+
+    const existingRecord = findAggregatedCard(record, lookupByKey, recordsByCharacter)
+    if (existingRecord) {
+      if (!existingRecord.pinyin && record.pinyin) {
+        existingRecord.pinyin = record.pinyin
+      }
+
+      if (!existingRecord.meaning && record.meaning) {
+        existingRecord.meaning = record.meaning
+      }
+
+      existingRecord.categoryNames = uniqueValues([
+        ...existingRecord.categoryNames,
+        ...record.categoryNames
+      ])
+      rememberAggregatedCard(existingRecord, lookupByKey, recordsByCharacter)
+      return
+    }
+
+    const nextRecord = {
+      character: record.character,
+      pinyin: record.pinyin,
+      meaning: record.meaning,
+      categoryNames: uniqueValues(record.categoryNames),
+      tags: []
+    }
+
+    aggregatedCards.push(nextRecord)
+    rememberAggregatedCard(nextRecord, lookupByKey, recordsByCharacter)
+  })
+
+  const cards = aggregatedCards.map(record => normalizeAggregatedCard(record, defaultDeckName))
+  const normalizedDeckNames = uniqueValues(cards.map(card => card.deckName))
+
+  if (!cards.length) {
+    throw new Error('No importable cards were found. Export a Pleco .txt file and try again.')
+  }
+
+  return {
+    delimiter: '\t',
+    hasHeader: false,
+    rowCount: dataRowCount,
+    invalidRowCount,
+    deckCount: normalizedDeckNames.length,
+    cardCount: cards.length,
+    deckNames: normalizedDeckNames,
+    cards
+  }
+}
+
 export async function parsePlecoImportFile(file, options = {}) {
   validatePlecoTextFile(file)
   const text = await file.text()
@@ -374,6 +510,10 @@ export function parsePlecoImportText(text, options = {}) {
 
   if (!normalizedText) {
     throw new Error('The selected file is empty.')
+  }
+
+  if (looksLikePlecoTabExport(normalizedText)) {
+    return parsePlecoTabExportText(normalizedText, defaultDeckName)
   }
 
   const delimiter = detectDelimiter(normalizedText)

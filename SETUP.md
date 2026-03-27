@@ -60,6 +60,8 @@ VITE_TURNSTILE_SITE_KEY=1x00000000000000000000AA
    - Existing matching linked or custom decks are refreshed instead of duplicated.
    - Repeated refreshes skip duplicates and can fill in missing pinyin or meaning on existing cards.
    - Cards are never deleted just because they are missing from a later Pleco export.
+   - Pleco's tab-separated `.txt` export is now parsed directly, so semicolons inside long definitions no longer get mistaken for separators.
+   - Lines like `// Dictionary`, `// Sentences`, and `// Jwl` become linked deck names when they are present in the Pleco export.
    - If the same Pleco card appears in multiple categories, the app keeps one card, uses one primary deck, and stores the extra Pleco categories as tags.
    - If a supposed Pleco category looks like full flashcard text instead of a real deck name, the app now ignores that category and falls back to the shared `Pleco Import` deck rather than creating bogus empty decks.
 6. Run `Sync Now` if you want the refreshed cards uploaded to Supabase for your other devices.
@@ -161,7 +163,11 @@ These external systems matter after code changes:
   If Pleco exported cards without category columns, the app groups them into a single `Pleco Import` deck.
 - Pleco import created empty decks with long card text as the deck name
   Update to the latest build.
-  The parser now ignores suspicious category values that look like full flashcard text instead of real Pleco deck names.
+  The parser now reads Pleco's tab-separated `.txt` export directly and also ignores suspicious category values that look like full flashcard text instead of real Pleco deck names.
   To clean up old bad imports, open `Decks`, press `Select`, then `Select Empty`, and delete those empty decks in one batch.
+- Settings shows more cards than Decks or Home after deleting bad Pleco decks
+  Update to the latest build and run `Sync Now` on the affected device.
+  The current sync layer now detaches active cards from deleted deck links and pushes that cleanup back to Supabase so cards stop hiding inside deleted decks.
+  After that sync, any previously hidden cards should show up as standalone cards so you can review or bulk-delete them deliberately.
 - Repo changes are live in GitHub but not in production
   Make sure Vercel redeployed the latest commit and that env var changes were applied to a fresh deployment.

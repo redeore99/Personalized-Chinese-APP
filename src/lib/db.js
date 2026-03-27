@@ -98,16 +98,19 @@ function resolveDeckFilter(deckFilter) {
 
 function matchesDeckFilter(card, deckFilter) {
   const resolvedFilter = resolveDeckFilter(deckFilter)
+  const cardDeckId = Object.prototype.hasOwnProperty.call(card, 'resolvedDeckId')
+    ? card.resolvedDeckId
+    : card.deckId
 
   if (resolvedFilter === 'all') {
     return true
   }
 
   if (resolvedFilter === DECK_FILTER_UNASSIGNED) {
-    return !card.deckId
+    return !cardDeckId
   }
 
-  return card.deckId === resolvedFilter
+  return cardDeckId === resolvedFilter
 }
 
 function matchesStatusFilter(card, statusFilter, now = nowIso()) {
@@ -313,13 +316,14 @@ function enrichCardRecord(card, deckById, now = nowIso()) {
     deckKind: deck?.kind || null,
     deckColor: deck?.color || '',
     deckSlug: deck?.slug || '',
+    resolvedDeckId: deck?.id || null,
     status,
     statusLabel: cardStatusLabel(status),
     isDue: status === 'due',
     isNew: status === 'new',
     isMastered: status === 'mastered',
     isLearning: status === 'learning',
-    isStandalone: !card.deckId
+    isStandalone: !deck
   }
 }
 
@@ -487,29 +491,54 @@ export async function addCard(cardData) {
 
 export async function getDueCards(deckFilter = null) {
   const now = nowIso()
-  const allDue = await db.cards.where('nextReview').belowOrEqual(now).toArray()
+  const [allDue, decks] = await Promise.all([
+    db.cards.where('nextReview').belowOrEqual(now).toArray(),
+    db.decks.toArray()
+  ])
+  const activeDeckIds = new Set(decks.filter(isActiveRecord).map(deck => deck.id))
 
   return allDue
     .filter(isActiveRecord)
     .filter(card => !card.suspended)
+    .map(card => ({
+      ...card,
+      resolvedDeckId: activeDeckIds.has(card.deckId) ? card.deckId : null
+    }))
     .filter(card => matchesDeckFilter(card, deckFilter))
     .sort((left, right) => left.nextReview.localeCompare(right.nextReview))
 }
 
 export async function getNewCards(deckFilter = null, limit = 20) {
-  const allCards = await db.cards.toArray()
+  const [allCards, decks] = await Promise.all([
+    db.cards.toArray(),
+    db.decks.toArray()
+  ])
+  const activeDeckIds = new Set(decks.filter(isActiveRecord).map(deck => deck.id))
 
   return allCards
     .filter(isActiveRecord)
     .filter(card => !card.suspended && card.repetitions === 0)
+    .map(card => ({
+      ...card,
+      resolvedDeckId: activeDeckIds.has(card.deckId) ? card.deckId : null
+    }))
     .filter(card => matchesDeckFilter(card, deckFilter))
     .slice(0, limit)
 }
 
 export async function getAllCards(deckFilter = null) {
-  const cards = await db.cards.toArray()
+  const [cards, decks] = await Promise.all([
+    db.cards.toArray(),
+    db.decks.toArray()
+  ])
+  const activeDeckIds = new Set(decks.filter(isActiveRecord).map(deck => deck.id))
+
   return cards
     .filter(isActiveRecord)
+    .map(card => ({
+      ...card,
+      resolvedDeckId: activeDeckIds.has(card.deckId) ? card.deckId : null
+    }))
     .filter(card => matchesDeckFilter(card, deckFilter))
 }
 
@@ -733,13 +762,14 @@ export async function getDecksWithCounts() {
     db.cards.toArray()
   ])
 
+  const activeDecks = decks.filter(isActiveRecord)
+  const activeDeckIds = new Set(activeDecks.map(deck => deck.id))
   const activeCards = cards.filter(isActiveRecord)
 
-  return decks
-    .filter(isActiveRecord)
+  return activeDecks
     .map(enrichDeckRecord)
     .map(deck => {
-      const deckCards = activeCards.filter(card => card.deckId === deck.id)
+      const deckCards = activeCards.filter(card => activeDeckIds.has(card.deckId) && card.deckId === deck.id)
       const dueCount = deckCards.filter(card => !card.suspended && card.nextReview <= now).length
       const newCount = deckCards.filter(card => !card.suspended && card.repetitions === 0).length
       const knownCount = deckCards.filter(card => card.repetitions >= 3).length
@@ -767,10 +797,14 @@ export async function getDecksWithCounts() {
 
 export async function getStandaloneCardSummary() {
   const now = nowIso()
-  const cards = await db.cards.toArray()
+  const [cards, decks] = await Promise.all([
+    db.cards.toArray(),
+    db.decks.toArray()
+  ])
+  const activeDeckIds = new Set(decks.filter(isActiveRecord).map(deck => deck.id))
   const standaloneCards = cards
     .filter(isActiveRecord)
-    .filter(card => !card.deckId)
+    .filter(card => !activeDeckIds.has(card.deckId))
 
   const dueCount = standaloneCards.filter(card => !card.suspended && card.nextReview <= now).length
   const newCount = standaloneCards.filter(card => !card.suspended && card.repetitions === 0).length
@@ -1335,11 +1369,12 @@ export async function getStats() {
 
   const activeCards = allCards.filter(isActiveRecord)
   const activeDecks = decks.filter(isActiveRecord)
+  const activeDeckIds = new Set(activeDecks.map(deck => deck.id))
   const dueCount = activeCards.filter(card => !card.suspended && card.nextReview <= now).length
   const totalCards = activeCards.length
   const knownCards = activeCards.filter(card => card.repetitions >= 3).length
   const newCards = activeCards.filter(card => card.repetitions === 0).length
-  const unassignedCount = activeCards.filter(card => !card.deckId).length
+  const unassignedCount = activeCards.filter(card => !activeDeckIds.has(card.deckId)).length
   const suspendedCount = activeCards.filter(card => card.suspended).length
 
   return {

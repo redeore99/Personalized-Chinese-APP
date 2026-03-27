@@ -21,11 +21,12 @@ A single-owner Chinese study PWA with spaced repetition review, Hanzi writing pr
 - The decks screen now supports bulk deck cleanup too. Deleting a deck keeps its cards as standalone cards instead of deleting study data.
 - Home now shows recent review and writing activity plus deck-level focus summaries.
 - Review and writing screens can deep-link the current word into Pleco on mobile.
-- Settings can now manually import or refresh Pleco `.txt` exports. Repeated refreshes union unique cards, avoid duplicates across repeated device exports, preserve existing local study data, keep extra Pleco categories as tags when the same card appears in multiple categories, and ignore suspicious “category” values so full flashcard text does not turn into bogus empty decks.
+- Settings can now manually import or refresh Pleco `.txt` exports. Repeated refreshes union unique cards, avoid duplicates across repeated device exports, preserve existing local study data, parse Pleco's tab-separated export structure directly, use `// Section` markers such as `Dictionary`, `Sentences`, and `Jwl` as linked deck names when present, keep extra Pleco categories as tags when the same card appears in multiple categories, and ignore suspicious “category” values so full flashcard text does not turn into bogus empty decks.
 - The installed PWA now registers updates eagerly and reloads when a new service worker takes control, so mobile should pick up fresh deployments more reliably.
 - Auth session validation is deferred outside Supabase auth-event callbacks to avoid client deadlocks during session restore.
 - The sign-in form now requires a Cloudflare Turnstile check and still applies a device-local cooldown after repeated failed password attempts. Keep Supabase CAPTCHA enabled too, since that is the server-side defense that actually verifies the token.
 - `Sync Now` is now a single smart reconcile action: it pulls cloud changes, pushes local changes, and automatically runs a full-library repair pass if counts still differ.
+- During sync, active cards that still point at deleted decks are now detached to standalone and pushed back up with no deck reference, so old deleted-deck links do not leave cards invisible on one device and counted on another.
 - Card and deck deletions sync as tombstones, so a stale undeleted copy on another device should no longer resurrect deleted records during sync.
 - Supabase now also protects sync updates server-side, so older writes should not overwrite newer tombstones or newer `updated_at` values after the latest SQL is applied.
 - Local card deletion now verifies that the Dexie tombstone write succeeded before the UI reports success.

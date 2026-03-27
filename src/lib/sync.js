@@ -213,7 +213,11 @@ async function upsertRemoteCards(rows) {
   if (!rows.length) return
 
   const localDecks = await db.decks.toArray()
-  const deckIdBySyncId = new Map(localDecks.map(deck => [deck.syncId, deck.id]))
+  const activeDeckBySyncId = new Map(
+    localDecks
+      .filter(deck => !deck.deletedAt)
+      .map(deck => [deck.syncId, deck])
+  )
 
   for (const row of rows) {
     const existing = await db.cards.where('syncId').equals(row.id).first()
@@ -221,10 +225,14 @@ async function upsertRemoteCards(rows) {
       continue
     }
 
+    const referencedDeck = row.deck_id ? activeDeckBySyncId.get(row.deck_id) || null : null
+    const shouldDetachMissingDeck = Boolean(row.deck_id && !referencedDeck && !row.deleted_at)
+    const normalizedUpdatedAt = shouldDetachMissingDeck ? new Date().toISOString() : row.updated_at
+
     const payload = {
       syncId: row.id,
-      deckId: row.deck_id ? deckIdBySyncId.get(row.deck_id) || null : null,
-      deckSyncId: row.deck_id || null,
+      deckId: referencedDeck?.id || null,
+      deckSyncId: referencedDeck ? row.deck_id : null,
       character: row.character,
       pinyin: row.pinyin || '',
       meaning: row.meaning || '',
@@ -240,9 +248,9 @@ async function upsertRemoteCards(rows) {
       writingCount: row.writing_count ?? 0,
       suspended: Boolean(row.suspended),
       createdAt: row.created_at,
-      updatedAt: row.updated_at,
+      updatedAt: normalizedUpdatedAt,
       deletedAt: row.deleted_at,
-      dirty: false
+      dirty: shouldDetachMissingDeck
     }
 
     if (existing) {
