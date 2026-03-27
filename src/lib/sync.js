@@ -331,7 +331,7 @@ async function upsertRemoteWritingLogs(rows) {
   }
 }
 
-async function pullFromCloud() {
+async function pullFromCloud({ replaceLocal = false } = {}) {
   const [decks, cards, reviewLogs, writingLogs] = await Promise.all([
     fetchRemoteTable('decks'),
     fetchRemoteTable('cards'),
@@ -340,6 +340,13 @@ async function pullFromCloud() {
   ])
 
   await db.transaction('rw', [db.decks, db.cards, db.reviewLog, db.writingLog], async () => {
+    if (replaceLocal) {
+      await db.reviewLog.clear()
+      await db.writingLog.clear()
+      await db.cards.clear()
+      await db.decks.clear()
+    }
+
     await upsertRemoteDecks(decks)
     await upsertRemoteCards(cards)
     await upsertRemoteReviewLogs(reviewLogs)
@@ -507,6 +514,34 @@ export async function migrateLocalDataToCloud(userId) {
   }
 
   return syncWithCloud(userId, { forceFullReconcile: true })
+}
+
+export async function rebuildLocalCacheFromCloud(userId) {
+  requireSupabase()
+
+  if (!userId) {
+    throw new Error('Cannot rebuild local data without an authenticated user.')
+  }
+
+  const pullResult = await pullFromCloud({ replaceLocal: true })
+  const syncedAt = new Date().toISOString()
+  const [localCounts, cloudCounts] = await Promise.all([
+    getLocalDataCounts(),
+    getCloudDataCounts()
+  ])
+
+  await setMetaValue(`cloud:lastSync:${userId}`, syncedAt)
+  await setMetaValue(`cloud:lastMigration:${userId}`, syncedAt)
+
+  return {
+    syncedAt,
+    reconciledAt: syncedAt,
+    rebuiltFromCloud: true,
+    countsStillDiffer: countsDiffer(localCounts, cloudCounts),
+    localCounts,
+    cloudCounts,
+    ...pullResult
+  }
 }
 
 export async function getCloudDataCounts() {

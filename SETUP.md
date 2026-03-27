@@ -172,5 +172,7 @@ These external systems matter after code changes:
 - One device still refuses to pull cards even though the cloud count is higher
   Update that device to the latest build and run `Sync Now` again.
   The current sync logic now lets an active cloud row heal a stale synced tombstone on that device, so a stale browser should no longer get stuck refusing valid remote cards forever.
+  If the device still refuses to match while another device already has the correct synced library, use `Settings -> Replace This Device With Cloud`.
+  That action discards only that device's local cache and rebuilds it from Supabase without changing the cloud or the healthy device.
 - Repo changes are live in GitHub but not in production
   Make sure Vercel redeployed the latest commit and that env var changes were applied to a fresh deployment.

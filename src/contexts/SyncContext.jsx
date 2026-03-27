@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import { useAuth } from './AuthContext'
 import { getMetaValue } from '../lib/db'
 import { isSupabaseConfigured } from '../lib/supabase'
-import { syncWithCloud } from '../lib/sync'
+import { rebuildLocalCacheFromCloud, syncWithCloud } from '../lib/sync'
 
 const SyncContext = createContext(null)
 
@@ -54,6 +54,11 @@ export function SyncProvider({ children }) {
   const syncNow = useCallback(() => {
     if (!user) return Promise.resolve({ skipped: true })
     return runExclusive('syncing', () => syncWithCloud(user.id))
+  }, [runExclusive, user])
+
+  const repairFromCloud = useCallback(() => {
+    if (!user) return Promise.resolve({ skipped: true })
+    return runExclusive('repairing', () => rebuildLocalCacheFromCloud(user.id))
   }, [runExclusive, user])
 
   useEffect(() => {
@@ -112,6 +117,7 @@ export function SyncProvider({ children }) {
         lastSyncedAt,
         lastReconciledAt,
         syncNow,
+        repairFromCloud,
         isConfigured: isSupabaseConfigured()
       }}
     >

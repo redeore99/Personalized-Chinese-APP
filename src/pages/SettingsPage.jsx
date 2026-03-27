@@ -13,6 +13,7 @@ function formatTimestamp(value) {
 
 function formatSyncStatus(status, error) {
   if (status === 'syncing') return 'Syncing with the cloud...'
+  if (status === 'repairing') return 'Replacing this device with the latest cloud data...'
   if (status === 'error') return error || 'Cloud sync failed.'
   return 'Idle'
 }
@@ -57,7 +58,14 @@ function buildPlecoImportMessage(parsed, result) {
 
 export default function SettingsPage({ onRefresh }) {
   const { user, signOut } = useAuth()
-  const { status: syncStatus, error: syncError, lastSyncedAt, lastReconciledAt, syncNow } = useSync()
+  const {
+    status: syncStatus,
+    error: syncError,
+    lastSyncedAt,
+    lastReconciledAt,
+    syncNow,
+    repairFromCloud
+  } = useSync()
 
   const [backupPassword, setBackupPassword] = useState('')
   const [status, setStatus] = useState(null) // { type: 'success'|'error', message }
@@ -65,6 +73,7 @@ export default function SettingsPage({ onRefresh }) {
   const [importingPleco, setImportingPleco] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [syncingNow, setSyncingNow] = useState(false)
+  const [repairingNow, setRepairingNow] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
   const [localCounts, setLocalCounts] = useState({
     cards: 0,
@@ -212,6 +221,42 @@ export default function SettingsPage({ onRefresh }) {
     setSigningOut(false)
   }
 
+  const handleRepairFromCloud = async () => {
+    const confirmed = window.confirm(
+      'Replace only this browser with the latest data from the cloud? This discards any unsynced local changes on this device, but it does not change the cloud or your other devices.'
+    )
+
+    if (!confirmed) {
+      return
+    }
+
+    setRepairingNow(true)
+    setStatus(null)
+
+    const result = await repairFromCloud()
+    if (result?.error) {
+      setStatus({ type: 'error', message: result.error.message })
+    } else if (!result?.skipped) {
+      if (result.countsStillDiffer) {
+        setStatus({
+          type: 'error',
+          message: 'Cloud repair finished, but this device still does not match the cloud. Stop here and send the new Settings screenshot before making more changes.'
+        })
+      } else {
+        setStatus({
+          type: 'success',
+          message: 'This device was rebuilt from the cloud. Local unsynced changes on this browser were discarded, but the cloud and your other devices were not changed.'
+        })
+      }
+
+      await refreshLocalCounts()
+      await refreshCloudCounts()
+      onRefresh?.()
+    }
+
+    setRepairingNow(false)
+  }
+
   const handlePlecoImport = async file => {
     setImportingPleco(true)
     setStatus(null)
@@ -298,19 +343,43 @@ export default function SettingsPage({ onRefresh }) {
           </div>
         )}
 
+        {!loadingCloudCounts && !countsMatch && (
+          <div className="card-message card-message-warning" style={{ marginBottom: 12 }}>
+            If another device already has the correct library, `Replace This Device With Cloud` is the safer repair path for a stuck browser. It rebuilds only this device from Supabase and leaves the cloud untouched.
+          </div>
+        )}
+
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button
             className="btn btn-primary btn-sm"
             onClick={handleSyncNow}
-            disabled={syncingNow || syncStatus === 'syncing'}
+            disabled={syncingNow || repairingNow || syncStatus === 'syncing' || syncStatus === 'repairing'}
           >
             {syncingNow || syncStatus === 'syncing' ? 'Syncing...' : 'Sync Now'}
           </button>
+
+          {!loadingCloudCounts && !countsMatch && (
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={handleRepairFromCloud}
+              disabled={repairingNow || syncingNow || syncStatus === 'syncing' || syncStatus === 'repairing'}
+            >
+              {repairingNow || syncStatus === 'repairing'
+                ? 'Replacing Device...'
+                : 'Replace This Device With Cloud'}
+            </button>
+          )}
         </div>
 
         <p className="text-secondary" style={{ fontSize: 12, marginTop: 12, lineHeight: 1.5 }}>
           `Sync Now` is now the only sync action: it pulls cloud changes down, uploads local dirty changes, and if local and cloud counts still disagree it automatically performs a full-library reconcile and pulls again.
         </p>
+
+        {!loadingCloudCounts && !countsMatch && (
+          <p className="text-secondary" style={{ fontSize: 12, marginTop: 8, lineHeight: 1.5 }}>
+            `Replace This Device With Cloud` is a stronger one-device recovery action. Use it only when another device already has the correct data synced and this browser keeps refusing to match the cloud.
+          </p>
+        )}
       </div>
 
       <div style={{ marginBottom: 24 }}>

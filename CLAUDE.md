@@ -36,7 +36,7 @@ The old local PIN lock system has been removed. Do not describe it as the curren
 - `src/contexts/AuthContext.jsx`
   Loads the Supabase session, signs in with email/password plus Supabase CAPTCHA token support, signs out, rejects unauthorized accounts, defers Supabase auth-event work outside the auth callback to avoid deadlocks, and applies a device-local cooldown after repeated failed password attempts.
 - `src/contexts/SyncContext.jsx`
-  Runs cloud sync on login, on focus, every 30 seconds, restores saved sync timestamps, and exposes a single manual sync/reconcile action from Settings.
+  Runs cloud sync on login, on focus, every 30 seconds, restores saved sync timestamps, and exposes both the normal manual sync/reconcile action and a one-device "replace from cloud" recovery action from Settings.
 - `src/lib/deckCatalog.js`
   Central metadata catalog for prebuilt decks such as HSK 5.
 - `src/lib/supabase.js`
@@ -63,7 +63,7 @@ The old local PIN lock system has been removed. Do not describe it as the curren
 - `src/pages/AddCardPage.jsx`
   Card creation form with deck assignment at save time.
 - `src/pages/SettingsPage.jsx`
-  Shows account status, sync actions, Pleco linked refresh, backup export/import, and local/cloud data counts.
+  Shows account status, sync actions, one-device cloud repair, Pleco linked refresh, backup export/import, and local/cloud data counts.
 - `supabase/schema.sql`
   Public generic SQL schema with placeholder email, owner-scoped sync tables, deck metadata columns, and server-side sync guards that protect newer tombstones and newer `updated_at` values.
 - `supabase/schema.local.sql`
@@ -146,6 +146,7 @@ Working now:
 - manual Pleco `.txt` linked refresh that unions unique cards across repeated exports, fills missing pinyin or meaning when possible, reads Pleco's tab-separated export plus `// Section` markers correctly, keeps extra Pleco categories as tags instead of duplicating cards, and ignores suspicious category values that would otherwise create bogus empty decks
 - manual `Sync Now` with automatic full reconcile when counts drift
 - cloud vs local counts visible in Settings for sync troubleshooting
+- one-device "replace from cloud" recovery for browsers whose local cache is stuck behind the canonical cloud data
 - sync repair for cards that still point at deleted decks, so they reappear as standalone instead of hiding from deck views
 - sync repair for stale synced local tombstones so an active cloud copy can pull back down when appropriate
 - prebuilt deck repair when a device has only a partial local import
