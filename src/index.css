@@ -1112,6 +1112,22 @@ textarea.input {
   gap: 14px;
 }
 
+.auth-captcha-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.auth-captcha-slot {
+  min-height: 68px;
+}
+
+.auth-help-text {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .auth-message {
   border-radius: 12px;
   padding: 12px 14px;

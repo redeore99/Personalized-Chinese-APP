@@ -28,11 +28,13 @@ The old local PIN lock system has been removed. Do not describe it as the curren
 - `src/App.jsx`
   Routes the app and gates everything behind `AuthGate`.
 - `src/components/AuthGate.jsx`
-  Shows the setup screen when Supabase env vars are missing and the sign-in form when auth is required.
+  Shows the setup screen when Supabase env vars are missing and the sign-in form when auth is required, including the Cloudflare Turnstile widget used before password sign-in.
+- `src/components/TurnstileWidget.jsx`
+  Loads and renders the Cloudflare Turnstile widget on the sign-in screen and resets it after failed sign-in attempts.
 - `src/components/PlecoLookupButton.jsx`
   Renders the shared "Open in Pleco" control for study flows and shows a desktop hint when the device is not mobile.
 - `src/contexts/AuthContext.jsx`
-  Loads the Supabase session, signs in with email/password, signs out, rejects unauthorized accounts, defers Supabase auth-event work outside the auth callback to avoid deadlocks, and applies a device-local cooldown after repeated failed password attempts.
+  Loads the Supabase session, signs in with email/password plus Supabase CAPTCHA token support, signs out, rejects unauthorized accounts, defers Supabase auth-event work outside the auth callback to avoid deadlocks, and applies a device-local cooldown after repeated failed password attempts.
 - `src/contexts/SyncContext.jsx`
   Runs cloud sync on login, on focus, every 30 seconds, restores saved sync timestamps, and exposes a single manual sync/reconcile action from Settings.
 - `src/lib/deckCatalog.js`
@@ -40,6 +42,8 @@ The old local PIN lock system has been removed. Do not describe it as the curren
 - `src/lib/supabase.js`
   Creates the client with `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`.
   It also accepts legacy `VITE_SUPABASE_ANON_KEY` as a fallback.
+- `src/lib/turnstile.js`
+  Exposes the public `VITE_TURNSTILE_SITE_KEY` and loads the Cloudflare Turnstile browser script on demand for the auth screen.
 - `src/lib/pleco.js`
   Builds Pleco deep-link URLs and detects whether the current device looks mobile enough to offer the live app shortcut.
 - `src/lib/plecoImport.js`
@@ -81,9 +85,12 @@ The old local PIN lock system has been removed. Do not describe it as the curren
 - The frontend must only use the browser-safe Supabase values:
   - `VITE_SUPABASE_URL`
   - `VITE_SUPABASE_PUBLISHABLE_KEY`
+- The frontend may also use the public Turnstile site key:
+  - `VITE_TURNSTILE_SITE_KEY`
 - Never put a Supabase secret key or service role key in frontend code, tracked files, or Vercel env meant for the client bundle.
+- Never put the Cloudflare Turnstile secret key in frontend code, tracked files, or browser env vars.
 - The browser stores a session token after login. It should not store the user's password.
-- The sign-in UI now adds a device-local cooldown after repeated failed password attempts, but Supabase Auth rate limits or bot protection must still stay enabled because the real attack surface is the server endpoint.
+- The sign-in UI now requires Cloudflare Turnstile and adds a device-local cooldown after repeated failed password attempts, but Supabase CAPTCHA and auth protections must still stay enabled because the real attack surface is the server endpoint.
 - Backups are encrypted with AES-256-GCM using a separate backup password and only contain the local study cache.
 - Backups do not include Supabase auth state, session tokens, or the removed legacy PIN metadata.
 - `src/lib/db.js` still contains a legacy `security` table only so old IndexedDB upgrades remain compatible. It is not the active auth system.
@@ -124,6 +131,7 @@ Do not stop at "the code is changed" if the app will still be broken until the u
 ## Current Feature Snapshot
 Working now:
 - account sign-in with Supabase email/password
+- Cloudflare Turnstile on the sign-in screen with Supabase CAPTCHA token support
 - single-account enforcement through Supabase schema and RLS
 - deck, card, review, and writing data synced through Supabase
 - local Dexie cache for normal app reads and offline-friendly behavior

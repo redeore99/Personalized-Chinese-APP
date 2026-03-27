@@ -23,7 +23,7 @@ A single-owner Chinese study PWA with spaced repetition review, Hanzi writing pr
 - Settings can now manually import or refresh Pleco `.txt` exports. Repeated refreshes union unique cards, avoid duplicates across repeated device exports, preserve existing local study data, and keep extra Pleco categories as tags when the same card appears in multiple categories.
 - The installed PWA now registers updates eagerly and reloads when a new service worker takes control, so mobile should pick up fresh deployments more reliably.
 - Auth session validation is deferred outside Supabase auth-event callbacks to avoid client deadlocks during session restore.
-- The sign-in form now applies a device-local cooldown after repeated failed password attempts. Keep Supabase password rate limits or bot protection enabled too, since that is the real server-side defense.
+- The sign-in form now requires a Cloudflare Turnstile check and still applies a device-local cooldown after repeated failed password attempts. Keep Supabase CAPTCHA enabled too, since that is the server-side defense that actually verifies the token.
 - `Sync Now` is now a single smart reconcile action: it pulls cloud changes, pushes local changes, and automatically runs a full-library repair pass if counts still differ.
 - Card and deck deletions sync as tombstones, so a stale undeleted copy on another device should no longer resurrect deleted records during sync.
 - Supabase now also protects sync updates server-side, so older writes should not overwrite newer tombstones or newer `updated_at` values after the latest SQL is applied.
@@ -43,6 +43,7 @@ Tracked files stay generic on purpose. Private owner-specific values should stay
 - GitHub push updates the source Vercel deploys from.
 - Supabase SQL files do not apply themselves automatically. Schema changes must be run manually in Supabase SQL Editor.
 - Vercel environment variable changes require a redeploy.
+- Cloudflare Turnstile now protects the login form. The browser uses the public site key, while the secret key stays only in Cloudflare and Supabase dashboard settings.
 - Pleco sync is manual and file-based on purpose. Export a `.txt` file from Pleco whenever needed, then refresh from that file inside the app.
 - If app behavior changes, the project guidance files should be refreshed so future sessions inherit the correct architecture.
 - This app now has deck metadata columns in Supabase. If you deploy the latest code, rerun the latest schema SQL before relying on cross-device deck organization.

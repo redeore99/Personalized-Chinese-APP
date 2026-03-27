@@ -115,7 +115,7 @@ function shouldCountFailedAttempt(error) {
     return true
   }
 
-  return !['network', 'fetch', 'timed out', 'timeout'].some(fragment => message.includes(fragment))
+  return !['network', 'fetch', 'timed out', 'timeout', 'captcha', 'turnstile'].some(fragment => message.includes(fragment))
 }
 
 export function AuthProvider({ children }) {
@@ -243,7 +243,7 @@ export function AuthProvider({ children }) {
     }
   }, [authGuard.lockedUntil])
 
-  const signInWithPassword = async ({ email, password }) => {
+  const signInWithPassword = async ({ email, password, captchaToken }) => {
     if (!supabase) {
       return { error: new Error('Supabase is not configured.') }
     }
@@ -262,7 +262,8 @@ export function AuthProvider({ children }) {
     setAuthError('')
     const result = await supabase.auth.signInWithPassword({
       email: email.trim().toLowerCase(),
-      password
+      password,
+      options: captchaToken ? { captchaToken } : undefined
     })
 
     if (result.error) {

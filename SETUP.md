@@ -29,21 +29,26 @@ If you keep a private local schema, keep it structurally aligned with the latest
 4. If you do not use the local-only file, replace the placeholder email in `supabase/schema.sql` and run that instead.
 5. In Supabase Auth settings, keep email/password enabled.
 6. Disable public signups.
-7. Review the current Supabase password rate-limit or bot-protection controls and keep them enabled. The app now adds a browser-local cooldown after repeated failures, but Supabase still needs to be the real brute-force defense.
-8. Manually create the one allowed user account and give it a long unique password.
-9. In Supabase Settings -> API Keys, copy the `Publishable key`.
-10. Build the project URL as `https://<project-ref>.supabase.co` or copy it from Supabase project settings.
-11. In Vercel Project Settings -> Environment Variables, add:
+7. In Cloudflare Dashboard -> Turnstile, create a widget for this app and allow your production Vercel domain plus `localhost` if you want local development.
+8. Copy the Turnstile `Site key` and `Secret key`.
+9. In Supabase Dashboard -> Authentication, open the CAPTCHA or bot-protection settings, enable CAPTCHA, choose Cloudflare Turnstile, and paste the Turnstile secret there. If the current dashboard also asks for the site key, paste that too.
+10. Review the current Supabase password rate-limit or bot-protection controls and keep them enabled. The app now adds a browser-local cooldown after repeated failures, but Supabase still needs to be the real brute-force defense.
+11. Manually create the one allowed user account and give it a long unique password.
+12. In Supabase Settings -> API Keys, copy the `Publishable key`.
+13. Build the project URL as `https://<project-ref>.supabase.co` or copy it from Supabase project settings.
+14. In Vercel Project Settings -> Environment Variables, add:
 
 ```env
 VITE_SUPABASE_URL=https://<project-ref>.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
+VITE_TURNSTILE_SITE_KEY=1x00000000000000000000AA
 ```
 
-12. Save the Vercel env vars and redeploy.
-13. Open the deployed app and sign in with the manually created account.
-14. On each older browser that already has local study data, sign in there too and run `Sync Now`. The latest app will automatically do a deeper full-library reconcile if local and cloud counts still disagree.
-15. If you deploy the latest library-management and sync-hardening update, rerun the latest schema SQL in Supabase so the new deck metadata columns (`slug`, `description`, `kind`, `source_key`, `color`, `sort_order`) and the server-side sync-protection triggers are applied before you rely on cross-device organization and deletion sync.
+15. Save the Vercel env vars and redeploy.
+16. If you develop locally, also add `VITE_TURNSTILE_SITE_KEY` to `.env.local`.
+17. Open the deployed app and sign in with the manually created account.
+18. On each older browser that already has local study data, sign in there too and run `Sync Now`. The latest app will automatically do a deeper full-library reconcile if local and cloud counts still disagree.
+19. If you deploy the latest library-management and sync-hardening update, rerun the latest schema SQL in Supabase so the new deck metadata columns (`slug`, `description`, `kind`, `source_key`, `color`, `sort_order`) and the server-side sync-protection triggers are applied before you rely on cross-device organization and deletion sync.
 
 ## Using Pleco Deck Import
 1. In Pleco flashcards, export the cards you want as a `.txt` file.
@@ -92,9 +97,12 @@ These external systems matter after code changes:
 - The frontend should only use the browser-safe Supabase values:
   - `VITE_SUPABASE_URL`
   - `VITE_SUPABASE_PUBLISHABLE_KEY`
+- The frontend can also safely use the public Turnstile site key:
+  - `VITE_TURNSTILE_SITE_KEY`
 - Never use the Supabase secret key or service role key in this frontend app.
+- Never put the Turnstile secret key in frontend code, tracked files, or browser env vars.
 - The browser stores a session token after login, not the user's password.
-- The app now adds a device-local cooldown after repeated failed password attempts, but that is only a speed bump. Supabase Auth rate limits or bot protection should stay enabled because the real attack surface is the server endpoint.
+- The sign-in screen now requires Cloudflare Turnstile and still adds a device-local cooldown after repeated failed password attempts, but that local cooldown is only a speed bump. Supabase CAPTCHA and auth protections should stay enabled because the real attack surface is the server endpoint.
 - Encrypted backups use a separate backup password and do not replace account security.
 
 ## If Something Looks Wrong
@@ -105,8 +113,13 @@ These external systems matter after code changes:
   If you use `supabase/schema.local.sql`, rerun the latest version of that file in Supabase SQL Editor.
   Otherwise rerun `supabase/schema.sql`.
   That recreates `public.is_allowed_user()` with the current `auth.users`-based check and restores the execute grant for `authenticated`.
+- Login page says Turnstile is not configured
+  Add `VITE_TURNSTILE_SITE_KEY` to `.env.local` for local use and to Vercel Project Settings -> Environment Variables for production.
+  Then redeploy Vercel.
+  In Supabase Dashboard -> Authentication, confirm CAPTCHA is enabled with Cloudflare Turnstile and the current Turnstile secret is saved there.
 - Someone keeps trying passwords against the login screen
   Double-check that public signups are still disabled in Supabase.
+  Confirm Supabase CAPTCHA is still enabled with Cloudflare Turnstile.
   Review the current Supabase Auth password rate-limit or bot-protection settings and keep them enabled.
   Change the account password to a long unique one if you suspect it has been exposed.
   The app now slows repeated failures from the same browser, but direct attacks still have to be stopped by Supabase.
