@@ -44,11 +44,19 @@ function shouldKeepLocalVersion(existing, remoteUpdatedAt, remoteDeletedAt) {
   }
 
   const localDeletedAt = existing.deletedAt || null
+  const localUpdatedAt = existing.updatedAt || localDeletedAt || null
 
   // Tombstones win over non-deleted copies so a deletion on one device
   // cannot be silently undone by a stale clean copy from another device.
+  // However, once a local tombstone is no longer pending upload, an active
+  // cloud row should be able to heal that stale tombstone instead of leaving
+  // the device permanently stuck behind the cloud.
   if (localDeletedAt && !remoteDeletedAt) {
-    return true
+    if (existing.dirty) {
+      return isLocalNewer(localUpdatedAt, remoteUpdatedAt)
+    }
+
+    return false
   }
 
   if (remoteDeletedAt) {

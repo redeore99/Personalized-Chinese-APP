@@ -27,6 +27,7 @@ A single-owner Chinese study PWA with spaced repetition review, Hanzi writing pr
 - The sign-in form now requires a Cloudflare Turnstile check and still applies a device-local cooldown after repeated failed password attempts. Keep Supabase CAPTCHA enabled too, since that is the server-side defense that actually verifies the token.
 - `Sync Now` is now a single smart reconcile action: it pulls cloud changes, pushes local changes, and automatically runs a full-library repair pass if counts still differ.
 - During sync, active cards that still point at deleted decks are now detached to standalone and pushed back up with no deck reference, so old deleted-deck links do not leave cards invisible on one device and counted on another.
+- During sync, an already-synced local tombstone no longer blocks an active cloud copy forever. If the cloud still has the live row, the device can now heal that stale tombstone and pull the row back down.
 - Card and deck deletions sync as tombstones, so a stale undeleted copy on another device should no longer resurrect deleted records during sync.
 - Supabase now also protects sync updates server-side, so older writes should not overwrite newer tombstones or newer `updated_at` values after the latest SQL is applied.
 - Local card deletion now verifies that the Dexie tombstone write succeeded before the UI reports success.

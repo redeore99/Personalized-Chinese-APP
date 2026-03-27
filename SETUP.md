@@ -169,5 +169,8 @@ These external systems matter after code changes:
   Update to the latest build and run `Sync Now` on the affected device.
   The current sync layer now detaches active cards from deleted deck links and pushes that cleanup back to Supabase so cards stop hiding inside deleted decks.
   After that sync, any previously hidden cards should show up as standalone cards so you can review or bulk-delete them deliberately.
+- One device still refuses to pull cards even though the cloud count is higher
+  Update that device to the latest build and run `Sync Now` again.
+  The current sync logic now lets an active cloud row heal a stale synced tombstone on that device, so a stale browser should no longer get stuck refusing valid remote cards forever.
 - Repo changes are live in GitHub but not in production
   Make sure Vercel redeployed the latest commit and that env var changes were applied to a fresh deployment.

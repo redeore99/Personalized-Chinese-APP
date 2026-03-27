@@ -51,7 +51,7 @@ The old local PIN lock system has been removed. Do not describe it as the curren
 - `src/lib/db.js`
   Dexie schema plus local CRUD helpers. It now stores richer deck metadata, supports card browsing/editing queries, refreshes linked Pleco decks without destructive overwrites or duplicate cards across repeated device exports, bulk-deletes cards through tombstones, bulk-deletes decks by tombstoning the deck while detaching cards to standalone, and exposes recent study activity helpers alongside the sync metadata fields such as `syncId`, `updatedAt`, `dirty`, and `deletedAt`.
 - `src/lib/sync.js`
-  Pulls remote rows into Dexie, pushes dirty local rows to Supabase, can report cloud counts, automatically runs a full-library reconcile when local and cloud counts still disagree, treats deletions as tombstones so stale undeleted rows do not resurrect records, detaches active cards from deleted deck links during pull so they do not become invisible orphan records, and falls back to the legacy deck shape until the latest Supabase deck columns have been applied.
+  Pulls remote rows into Dexie, pushes dirty local rows to Supabase, can report cloud counts, automatically runs a full-library reconcile when local and cloud counts still disagree, treats deletions as tombstones so stale undeleted rows do not resurrect records, allows an active cloud row to heal a stale synced local tombstone, detaches active cards from deleted deck links during pull so they do not become invisible orphan records, and falls back to the legacy deck shape until the latest Supabase deck columns have been applied.
 - `src/lib/backup.js`
   Encrypted export and restore for the local cache using a separate backup password.
 - `src/pages/HomePage.jsx`
@@ -147,6 +147,7 @@ Working now:
 - manual `Sync Now` with automatic full reconcile when counts drift
 - cloud vs local counts visible in Settings for sync troubleshooting
 - sync repair for cards that still point at deleted decks, so they reappear as standalone instead of hiding from deck views
+- sync repair for stale synced local tombstones so an active cloud copy can pull back down when appropriate
 - prebuilt deck repair when a device has only a partial local import
 - encrypted local backup export/import with a separate backup password
 - browser-local cooldown after repeated failed sign-in attempts
