@@ -20,7 +20,7 @@ A single-owner Chinese study PWA with spaced repetition review, Hanzi writing pr
 - The app now has a dedicated card-library screen for search, filtering, and lightweight editing.
 - Home now shows recent review and writing activity plus deck-level focus summaries.
 - Review and writing screens can deep-link the current word into Pleco on mobile.
-- Settings can now one-way import Pleco flashcard exports from local text, TSV, or CSV files. The first Pleco category becomes the deck, and extra categories are kept as tags.
+- Settings can now manually import or refresh Pleco `.txt` exports. Repeated refreshes union unique cards, avoid duplicates across repeated device exports, preserve existing local study data, and keep extra Pleco categories as tags when the same card appears in multiple categories.
 - The installed PWA now registers updates eagerly and reloads when a new service worker takes control, so mobile should pick up fresh deployments more reliably.
 - Auth session validation is deferred outside Supabase auth-event callbacks to avoid client deadlocks during session restore.
 - The sign-in form now applies a device-local cooldown after repeated failed password attempts. Keep Supabase password rate limits or bot protection enabled too, since that is the real server-side defense.
@@ -43,7 +43,7 @@ Tracked files stay generic on purpose. Private owner-specific values should stay
 - GitHub push updates the source Vercel deploys from.
 - Supabase SQL files do not apply themselves automatically. Schema changes must be run manually in Supabase SQL Editor.
 - Vercel environment variable changes require a redeploy.
-- Pleco import is file-based on purpose. Google Drive can store the exported file, but the app imports the file you choose from the device rather than syncing to Drive directly.
+- Pleco sync is manual and file-based on purpose. Export a `.txt` file from Pleco whenever needed, then refresh from that file inside the app.
 - If app behavior changes, the project guidance files should be refreshed so future sessions inherit the correct architecture.
 - This app now has deck metadata columns in Supabase. If you deploy the latest code, rerun the latest schema SQL before relying on cross-device deck organization.
 

@@ -20,7 +20,7 @@ If you keep a private local schema, keep it structurally aligned with the latest
 - Supabase stores the account and synced study data.
 - Dexie/IndexedDB stores the local browser cache.
 - Encrypted backups store a portable offline copy of the local cache.
-- Pleco deck import is file-based. You can keep the export in Google Drive, but the app imports the file you choose locally.
+- Pleco deck refresh is file-based. Export a `.txt` file from Pleco whenever needed, then refresh from that file in the app.
 
 ## First-Time Setup
 1. Create a Supabase project.
@@ -46,16 +46,17 @@ VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
 15. If you deploy the latest library-management and sync-hardening update, rerun the latest schema SQL in Supabase so the new deck metadata columns (`slug`, `description`, `kind`, `source_key`, `color`, `sort_order`) and the server-side sync-protection triggers are applied before you rely on cross-device organization and deletion sync.
 
 ## Using Pleco Deck Import
-1. In Pleco flashcards, export the cards you want as a text, TSV, or CSV file.
-2. Save or share that file somewhere your phone or computer can open. Google Drive is fine as storage.
+1. In Pleco flashcards, export the cards you want as a `.txt` file.
+2. Save that file somewhere your phone or computer can open.
 3. In the app, open `Settings`.
-4. Use `Import From Pleco` and choose the exported file.
-5. The import is one-way and merge-based:
-   - Missing decks are created automatically.
-   - Existing matching custom decks are reused.
-   - Repeated imports skip duplicates and can fill in missing pinyin or meaning on existing cards.
-   - The first Pleco category becomes the deck in this app, and extra categories become tags.
-6. Run `Sync Now` if you want the imported cards uploaded to Supabase for your other devices.
+4. Use `Import / Refresh From Pleco` and choose the exported `.txt` file.
+5. The refresh is manual, linked, and additive:
+   - Missing linked Pleco decks are created automatically when new cards need them.
+   - Existing matching linked or custom decks are refreshed instead of duplicated.
+   - Repeated refreshes skip duplicates and can fill in missing pinyin or meaning on existing cards.
+   - Cards are never deleted just because they are missing from a later Pleco export.
+   - If the same Pleco card appears in multiple categories, the app keeps one card, uses one primary deck, and stores the extra Pleco categories as tags.
+6. Run `Sync Now` if you want the refreshed cards uploaded to Supabase for your other devices.
 
 ## Optional Local Development
 Local development is not required just to use the deployed app, but it is useful when making or testing code changes.
@@ -132,7 +133,8 @@ These external systems matter after code changes:
   Then press `Sync Now` on the fuller device first, followed by the other devices.
 - Pleco import created fewer decks than expected
   This app currently supports one deck per card.
-  The first Pleco category becomes the deck, while additional Pleco categories are saved as tags on that card.
+  The first Pleco category used for that card becomes the primary deck, while additional Pleco categories are saved as tags on that card.
+  If multiple devices export overlapping Pleco cards, the app unions those cards safely instead of duplicating them across decks.
   If Pleco exported cards without category columns, the app groups them into a single `Pleco Import` deck.
 - Repo changes are live in GitHub but not in production
   Make sure Vercel redeployed the latest commit and that env var changes were applied to a fresh deployment.

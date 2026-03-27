@@ -43,9 +43,9 @@ The old local PIN lock system has been removed. Do not describe it as the curren
 - `src/lib/pleco.js`
   Builds Pleco deep-link URLs and detects whether the current device looks mobile enough to offer the live app shortcut.
 - `src/lib/plecoImport.js`
-  Parses Pleco text, TSV, and CSV exports for one-way deck import, maps the first Pleco category to the target deck, and keeps extra categories as tags.
+  Parses Pleco `.txt` exports for linked manual refresh, unions repeated rows into unique cards, maps one primary Pleco category to the target deck, and keeps extra categories as tags.
 - `src/lib/db.js`
-  Dexie schema plus local CRUD helpers. It now stores richer deck metadata, supports card browsing/editing queries, merges Pleco imports into matching custom decks, and exposes recent study activity helpers alongside the sync metadata fields such as `syncId`, `updatedAt`, `dirty`, and `deletedAt`.
+  Dexie schema plus local CRUD helpers. It now stores richer deck metadata, supports card browsing/editing queries, refreshes linked Pleco decks without destructive overwrites or duplicate cards across repeated device exports, and exposes recent study activity helpers alongside the sync metadata fields such as `syncId`, `updatedAt`, `dirty`, and `deletedAt`.
 - `src/lib/sync.js`
   Pulls remote rows into Dexie, pushes dirty local rows to Supabase, can report cloud counts, automatically runs a full-library reconcile when local and cloud counts still disagree, treats deletions as tombstones so stale undeleted rows do not resurrect records, and falls back to the legacy deck shape until the latest Supabase deck columns have been applied.
 - `src/lib/backup.js`
@@ -59,7 +59,7 @@ The old local PIN lock system has been removed. Do not describe it as the curren
 - `src/pages/AddCardPage.jsx`
   Card creation form with deck assignment at save time.
 - `src/pages/SettingsPage.jsx`
-  Shows account status, sync actions, Pleco import, backup export/import, and local/cloud data counts.
+  Shows account status, sync actions, Pleco linked refresh, backup export/import, and local/cloud data counts.
 - `supabase/schema.sql`
   Public generic SQL schema with placeholder email, owner-scoped sync tables, deck metadata columns, and server-side sync guards that protect newer tombstones and newer `updated_at` values.
 - `supabase/schema.local.sql`
@@ -133,7 +133,7 @@ Working now:
 - home dashboard recent activity and deck focus summaries
 - deck-specific browse/review entry points
 - Pleco deep-link lookup from active review and writing sessions on mobile
-- one-way Pleco deck import from exported text, TSV, or CSV files, with repeated imports skipping duplicates and filling missing pinyin or meaning when possible
+- manual Pleco `.txt` linked refresh that unions unique cards across repeated exports, fills missing pinyin or meaning when possible, and keeps extra Pleco categories as tags instead of duplicating cards
 - manual `Sync Now` with automatic full reconcile when counts drift
 - cloud vs local counts visible in Settings for sync troubleshooting
 - prebuilt deck repair when a device has only a partial local import

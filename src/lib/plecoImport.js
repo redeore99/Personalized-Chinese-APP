@@ -1,4 +1,5 @@
 const DEFAULT_PLECO_DECK_NAME = 'Pleco Import'
+const PLECO_TEXT_FILE_PATTERN = /\.txt$/i
 
 const HEADER_FIELD_MATCHERS = [
   {
@@ -40,18 +41,26 @@ function sanitizeText(value) {
     .trim()
 }
 
+function normalizeLookupPart(value) {
+  return sanitizeText(value)
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+}
+
 function uniqueValues(values) {
   const seen = new Set()
   const result = []
 
   for (const value of values) {
-    const normalized = value.toLowerCase()
+    const text = sanitizeText(value)
+    const normalized = text.toLowerCase()
+
     if (!normalized || seen.has(normalized)) {
       continue
     }
 
     seen.add(normalized)
-    result.push(value)
+    result.push(text)
   }
 
   return result
@@ -218,39 +227,113 @@ function readMappedValue(row, columnMap, field) {
   return index === undefined ? '' : sanitizeText(row[index])
 }
 
-function buildRowRecord(row, rowNumber, columnMap, defaultDeckName) {
+function buildLookupKeys({ character, pinyin = '', meaning = '' }) {
+  const normalizedCharacter = normalizeLookupPart(character)
+  const normalizedPinyin = normalizeLookupPart(pinyin)
+  const normalizedMeaning = normalizeLookupPart(meaning)
+
+  return [
+    normalizedCharacter && normalizedPinyin && normalizedMeaning
+      ? `full:${normalizedCharacter}::${normalizedPinyin}::${normalizedMeaning}`
+      : null,
+    normalizedCharacter && normalizedPinyin
+      ? `char-pinyin:${normalizedCharacter}::${normalizedPinyin}`
+      : null,
+    normalizedCharacter && normalizedMeaning
+      ? `char-meaning:${normalizedCharacter}::${normalizedMeaning}`
+      : null
+  ].filter(Boolean)
+}
+
+function buildCharacterLookupKey(character) {
+  return normalizeLookupPart(character)
+}
+
+function buildRowRecord(row, rowNumber, columnMap) {
   const character = readMappedValue(row, columnMap, 'character')
   if (!character) {
     return null
   }
 
-  const pinyin = readMappedValue(row, columnMap, 'pinyin')
-  const meaning = readMappedValue(row, columnMap, 'meaning')
-  const categories = splitListValue(readMappedValue(row, columnMap, 'deck'))
-  const importedTags = splitListValue(readMappedValue(row, columnMap, 'tags'))
-  const deckName = categories[0] || defaultDeckName
-  const tags = uniqueValues([...categories.slice(1), ...importedTags, 'pleco-import'])
-
   return {
     rowNumber,
     character,
-    pinyin,
-    meaning,
-    deckName,
-    tags
+    pinyin: readMappedValue(row, columnMap, 'pinyin'),
+    meaning: readMappedValue(row, columnMap, 'meaning'),
+    categoryNames: splitListValue(readMappedValue(row, columnMap, 'deck')),
+    tags: splitListValue(readMappedValue(row, columnMap, 'tags'))
   }
 }
 
-function buildRowSignature(record) {
-  return JSON.stringify([
-    record.deckName,
-    record.character,
-    record.pinyin,
-    record.meaning
-  ])
+function findComplementaryCharacterMatch(record, recordsByCharacter) {
+  const characterKey = buildCharacterLookupKey(record.character)
+  if (!characterKey) {
+    return null
+  }
+
+  const candidates = Array.from(recordsByCharacter.get(characterKey) || [])
+  const compatibleCandidates = candidates.filter(candidate => (
+    Boolean(candidate.pinyin) !== Boolean(record.pinyin) &&
+    Boolean(candidate.meaning) !== Boolean(record.meaning)
+  ))
+
+  return compatibleCandidates.length === 1 ? compatibleCandidates[0] : null
+}
+
+function findAggregatedCard(record, lookupByKey, recordsByCharacter) {
+  for (const key of buildLookupKeys(record)) {
+    const match = lookupByKey.get(key)
+    if (match) {
+      return match
+    }
+  }
+
+  return findComplementaryCharacterMatch(record, recordsByCharacter)
+}
+
+function rememberAggregatedCard(record, lookupByKey, recordsByCharacter) {
+  for (const key of buildLookupKeys(record)) {
+    if (!lookupByKey.has(key)) {
+      lookupByKey.set(key, record)
+    }
+  }
+
+  const characterKey = buildCharacterLookupKey(record.character)
+  if (!characterKey) {
+    return
+  }
+
+  if (!recordsByCharacter.has(characterKey)) {
+    recordsByCharacter.set(characterKey, new Set())
+  }
+
+  recordsByCharacter.get(characterKey).add(record)
+}
+
+function normalizeAggregatedCard(record, defaultDeckName) {
+  const categoryNames = uniqueValues(record.categoryNames)
+  const primaryDeckName = categoryNames[0] || defaultDeckName
+
+  return {
+    character: record.character,
+    pinyin: record.pinyin,
+    meaning: record.meaning,
+    deckName: primaryDeckName,
+    categoryNames,
+    tags: uniqueValues([...categoryNames.slice(1), ...record.tags])
+  }
+}
+
+function validatePlecoTextFile(file) {
+  const name = sanitizeText(file?.name)
+
+  if (name && !PLECO_TEXT_FILE_PATTERN.test(name)) {
+    throw new Error('Pleco linked refresh currently supports .txt exports only.')
+  }
 }
 
 export async function parsePlecoImportFile(file, options = {}) {
+  validatePlecoTextFile(file)
   const text = await file.text()
   return parsePlecoImportText(text, options)
 }
@@ -267,45 +350,62 @@ export function parsePlecoImportText(text, options = {}) {
   const rows = parseDelimitedText(normalizedText, delimiter)
 
   if (!rows.length) {
-    throw new Error('The selected file could not be read as a Pleco export.')
+    throw new Error('The selected file could not be read as a Pleco .txt export.')
   }
 
   const { hasHeader, map } = inferColumnMap(rows)
   const dataRows = hasHeader ? rows.slice(1) : rows
-  const deckMap = new Map()
-  const seenRows = new Set()
+  const aggregatedCards = []
+  const lookupByKey = new Map()
+  const recordsByCharacter = new Map()
   let invalidRowCount = 0
 
   dataRows.forEach((row, index) => {
-    const record = buildRowRecord(row, index + (hasHeader ? 2 : 1), map, defaultDeckName)
+    const record = buildRowRecord(row, index + (hasHeader ? 2 : 1), map)
     if (!record) {
       invalidRowCount += 1
       return
     }
 
-    const rowSignature = buildRowSignature(record)
-    if (seenRows.has(rowSignature)) {
+    const existingRecord = findAggregatedCard(record, lookupByKey, recordsByCharacter)
+    if (existingRecord) {
+      if (!existingRecord.pinyin && record.pinyin) {
+        existingRecord.pinyin = record.pinyin
+      }
+
+      if (!existingRecord.meaning && record.meaning) {
+        existingRecord.meaning = record.meaning
+      }
+
+      existingRecord.categoryNames = uniqueValues([
+        ...existingRecord.categoryNames,
+        ...record.categoryNames
+      ])
+      existingRecord.tags = uniqueValues([
+        ...existingRecord.tags,
+        ...record.tags
+      ])
+      rememberAggregatedCard(existingRecord, lookupByKey, recordsByCharacter)
       return
     }
 
-    seenRows.add(rowSignature)
-
-    if (!deckMap.has(record.deckName)) {
-      deckMap.set(record.deckName, [])
+    const nextRecord = {
+      character: record.character,
+      pinyin: record.pinyin,
+      meaning: record.meaning,
+      categoryNames: uniqueValues(record.categoryNames),
+      tags: uniqueValues(record.tags)
     }
 
-    deckMap.get(record.deckName).push(record)
+    aggregatedCards.push(nextRecord)
+    rememberAggregatedCard(nextRecord, lookupByKey, recordsByCharacter)
   })
 
-  const decks = Array.from(deckMap.entries()).map(([name, cards]) => ({
-    name,
-    cards
-  }))
+  const cards = aggregatedCards.map(record => normalizeAggregatedCard(record, defaultDeckName))
+  const deckNames = uniqueValues(cards.map(card => card.deckName))
 
-  const cardCount = decks.reduce((total, deck) => total + deck.cards.length, 0)
-
-  if (!cardCount) {
-    throw new Error('No importable cards were found. Export a text, TSV, or CSV file from Pleco flashcards and try again.')
+  if (!cards.length) {
+    throw new Error('No importable cards were found. Export a Pleco .txt file and try again.')
   }
 
   return {
@@ -313,9 +413,10 @@ export function parsePlecoImportText(text, options = {}) {
     hasHeader,
     rowCount: dataRows.length,
     invalidRowCount,
-    deckCount: decks.length,
-    cardCount,
-    decks
+    deckCount: deckNames.length,
+    cardCount: cards.length,
+    deckNames,
+    cards
   }
 }
 

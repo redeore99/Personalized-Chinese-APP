@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { exportBackup, importBackup, downloadBlob } from '../lib/backup'
-import { getLocalDataCounts, importPlecoDecks } from '../lib/db'
+import { getLocalDataCounts, refreshPlecoLinkedDecks } from '../lib/db'
 import { useAuth } from '../contexts/AuthContext'
 import { useSync } from '../contexts/SyncContext'
 import { getCloudDataCounts } from '../lib/sync'
@@ -23,34 +23,35 @@ function formatCount(count, singular, plural = `${singular}s`) {
 
 function buildPlecoImportMessage(parsed, result) {
   const parts = [
-    `Parsed ${formatCount(parsed.cardCount, 'card')} from ${formatCount(parsed.deckCount, 'Pleco deck')}.`
+    `Read ${formatCount(parsed.cardCount, 'unique Pleco card')}.`
   ]
 
-  if (result.cardsImported) {
-    parts.push(`Imported ${formatCount(result.cardsImported, 'new card')}.`)
+  if (result.decksCreated) {
+    parts.push(`Created ${formatCount(result.decksCreated, 'linked deck')}.`)
   }
 
-  if (result.cardsUpdated) {
-    parts.push(`Updated ${formatCount(result.cardsUpdated, 'existing card')} with missing Pleco details.`)
+  if (result.decksRefreshed) {
+    parts.push(`Refreshed ${formatCount(result.decksRefreshed, 'linked deck')}.`)
+  }
+
+  if (result.cardsAdded) {
+    parts.push(`Added ${formatCount(result.cardsAdded, 'new card')}.`)
+  }
+
+  if (result.cardsEnriched) {
+    parts.push(`Enriched ${formatCount(result.cardsEnriched, 'existing card')} with missing Pleco details.`)
   }
 
   if (result.cardsSkipped) {
-    parts.push(`Skipped ${formatCount(result.cardsSkipped, 'duplicate card')}.`)
-  }
-
-  if (result.decksCreated) {
-    parts.push(`Created ${formatCount(result.decksCreated, 'deck')}.`)
-  }
-
-  if (result.decksMatched) {
-    parts.push(`Reused ${formatCount(result.decksMatched, 'existing deck')}.`)
+    parts.push(`Skipped ${formatCount(result.cardsSkipped, 'unchanged duplicate')}.`)
   }
 
   if (parsed.invalidRowCount) {
     parts.push(`Ignored ${formatCount(parsed.invalidRowCount, 'incomplete row')}.`)
   }
 
-  parts.push('Run "Sync Now" if you want these imported cards uploaded to Supabase.')
+  parts.push('Existing local cards were not deleted or overwritten.')
+  parts.push('Run "Sync Now" if you want these refreshed cards uploaded to Supabase.')
   return parts.join(' ')
 }
 
@@ -217,7 +218,7 @@ export default function SettingsPage({ onRefresh }) {
 
     try {
       const parsed = await parsePlecoImportFile(file)
-      const result = await importPlecoDecks(parsed.decks)
+      const result = await refreshPlecoLinkedDecks(parsed.cards)
 
       setStatus({
         type: 'success',
@@ -347,17 +348,20 @@ export default function SettingsPage({ onRefresh }) {
       </div>
 
       <div className="card" style={{ marginBottom: 12 }}>
-        <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Import From Pleco</h3>
+        <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Import / Refresh From Pleco</h3>
         <p className="text-secondary" style={{ fontSize: 13, marginBottom: 12, lineHeight: 1.5 }}>
-          One-way merge import for Pleco flashcards. Export a Pleco text, TSV, or CSV file, then pick it here. Google Drive is fine as storage, but the app imports the file you choose from this device instead of connecting to Drive directly.
+          Manual linked refresh for Pleco flashcards. Export a Pleco `.txt` file whenever you add more words, then pick it here to union the latest unique cards into this app without creating duplicates.
         </p>
         <p className="text-secondary" style={{ fontSize: 13, marginBottom: 12, lineHeight: 1.5 }}>
-          The first Pleco category becomes the deck in this app. If a card belongs to extra Pleco categories, those extra categories are saved as tags.
+          Linked Pleco refreshes are additive only: this app never deletes cards just because they are missing from a later Pleco export, and it never overwrites non-empty local data with weaker Pleco data.
+        </p>
+        <p className="text-secondary" style={{ fontSize: 13, marginBottom: 12, lineHeight: 1.5 }}>
+          When Pleco categories are present, each category can refresh its own linked deck. If the same Pleco card appears in multiple categories, this app keeps one card, uses one primary deck, and stores the extra Pleco categories as tags.
         </p>
         <input
           ref={plecoFileInputRef}
           type="file"
-          accept=".txt,.tsv,.csv,text/plain,text/csv"
+          accept=".txt,text/plain"
           style={{ display: 'none' }}
           onChange={event => {
             if (event.target.files[0]) handlePlecoImport(event.target.files[0])
@@ -368,7 +372,7 @@ export default function SettingsPage({ onRefresh }) {
           onClick={() => plecoFileInputRef.current?.click()}
           disabled={importingPleco}
         >
-          {importingPleco ? 'Importing Pleco...' : 'Import Pleco Export'}
+          {importingPleco ? 'Refreshing Pleco...' : 'Import / Refresh Pleco .txt'}
         </button>
       </div>
 

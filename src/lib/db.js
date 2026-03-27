@@ -206,6 +206,25 @@ function buildImportedCardLookupKeys({ character, pinyin = '', meaning = '' }) {
   ].filter(Boolean)
 }
 
+function buildCharacterLookupKey(character) {
+  return normalizeImportKeyPart(character)
+}
+
+function findComplementaryCharacterMatch(importedCard, cardsByCharacter) {
+  const characterKey = buildCharacterLookupKey(importedCard.character)
+  if (!characterKey) {
+    return null
+  }
+
+  const candidates = Array.from(cardsByCharacter.get(characterKey) || [])
+  const compatibleCandidates = candidates.filter(card => (
+    Boolean(card.pinyin) !== Boolean(importedCard.pinyin) &&
+    Boolean(card.meaning) !== Boolean(importedCard.meaning)
+  ))
+
+  return compatibleCandidates.length === 1 ? compatibleCandidates[0] : null
+}
+
 function mergeTagLists(existingTags = [], nextTags = []) {
   const merged = []
   const seen = new Set()
@@ -223,6 +242,14 @@ function mergeTagLists(existingTags = [], nextTags = []) {
   }
 
   return merged
+}
+
+function isPlecoLinkedSourceKey(sourceKey) {
+  return typeof sourceKey === 'string' && sourceKey.startsWith('pleco:')
+}
+
+function createPlecoSourceKey(deckName) {
+  return `pleco:${slugify(deckName)}`
 }
 
 function getLatestTimestamp(values) {
@@ -771,13 +798,13 @@ export async function repairDeckCards(deckId, wordsArray, tags = []) {
   }
 }
 
-export async function importPlecoDecks(plecoDecks = []) {
-  if (!Array.isArray(plecoDecks) || plecoDecks.length === 0) {
+export async function refreshPlecoLinkedDecks(plecoCards = []) {
+  if (!Array.isArray(plecoCards) || plecoCards.length === 0) {
     return {
       decksCreated: 0,
-      decksMatched: 0,
-      cardsImported: 0,
-      cardsUpdated: 0,
+      decksRefreshed: 0,
+      cardsAdded: 0,
+      cardsEnriched: 0,
       cardsSkipped: 0
     }
   }
@@ -787,75 +814,75 @@ export async function importPlecoDecks(plecoDecks = []) {
     const cards = (await db.cards.toArray()).filter(isActiveRecord)
     const deckBySourceKey = new Map()
     const deckByName = new Map()
-    const deckBuckets = new Map()
+    const cardByLookupKey = new Map()
+    const cardsByCharacter = new Map()
     const cardsToAdd = []
+    const createdDeckIds = new Set()
+    const refreshedDeckIds = new Set()
     const summary = {
       decksCreated: 0,
-      decksMatched: 0,
-      cardsImported: 0,
-      cardsUpdated: 0,
+      decksRefreshed: 0,
+      cardsAdded: 0,
+      cardsEnriched: 0,
       cardsSkipped: 0
     }
 
-    function ensureDeckBucket(deckId) {
-      if (!deckBuckets.has(deckId)) {
-        deckBuckets.set(deckId, { byKey: new Map() })
-      }
-
-      return deckBuckets.get(deckId)
-    }
-
-    function rememberCard(deckId, card) {
-      const bucket = ensureDeckBucket(deckId)
-
+    function rememberCard(card) {
       for (const key of buildImportedCardLookupKeys(card)) {
-        if (!bucket.byKey.has(key)) {
-          bucket.byKey.set(key, card)
+        if (!cardByLookupKey.has(key)) {
+          cardByLookupKey.set(key, card)
         }
       }
+
+      const characterKey = buildCharacterLookupKey(card.character)
+      if (!characterKey) {
+        return
+      }
+
+      if (!cardsByCharacter.has(characterKey)) {
+        cardsByCharacter.set(characterKey, new Set())
+      }
+
+      cardsByCharacter.get(characterKey).add(card)
     }
 
-    function findExistingCard(deckId, importedCard) {
-      const bucket = ensureDeckBucket(deckId)
-
+    function findExistingCard(importedCard) {
       for (const key of buildImportedCardLookupKeys(importedCard)) {
-        const match = bucket.byKey.get(key)
+        const match = cardByLookupKey.get(key)
         if (match) {
           return match
         }
       }
 
-      return null
+      return findComplementaryCharacterMatch(importedCard, cardsByCharacter)
     }
 
-    for (const deck of decks) {
+    function rememberDeck(deck) {
       if (deck.sourceKey) {
         deckBySourceKey.set(deck.sourceKey, deck)
       }
 
-      if (deck.kind === 'custom' || !deck.sourceKey || String(deck.sourceKey).startsWith('pleco:')) {
+      if (deck.kind === 'custom' && (!deck.sourceKey || isPlecoLinkedSourceKey(deck.sourceKey))) {
         deckByName.set(deck.name.toLowerCase(), deck)
       }
     }
 
-    for (const card of cards) {
-      if (card.deckId) {
-        rememberCard(card.deckId, card)
-      }
-    }
-
-    for (const importedDeck of plecoDecks) {
-      const deckName = String(importedDeck?.name || '').trim() || 'Pleco Import'
-      const sourceKey = `pleco:${slugify(deckName)}`
-      let deck = deckBySourceKey.get(sourceKey) || deckByName.get(deckName.toLowerCase()) || null
+    async function touchLinkedDeck(deckName, createIfMissing = false) {
+      const normalizedDeckName = String(deckName || '').trim() || 'Pleco Import'
+      const sourceKey = createPlecoSourceKey(normalizedDeckName)
+      let deck = deckBySourceKey.get(sourceKey) || deckByName.get(normalizedDeckName.toLowerCase()) || null
 
       if (!deck) {
+        if (!createIfMissing) {
+          return null
+        }
+
         const createdAt = nowIso()
         const metadata = normalizeDeckMetadata({
-          name: deckName,
+          name: normalizedDeckName,
           kind: 'custom',
           sourceKey,
-          description: 'Imported from Pleco flashcards'
+          description: 'Linked to Pleco .txt refresh imports'
         })
 
         const newDeck = {
@@ -869,115 +896,141 @@ export async function importPlecoDecks(plecoDecks = []) {
 
         const deckId = await db.decks.add(newDeck)
         deck = { ...newDeck, id: deckId }
-        deckBySourceKey.set(sourceKey, deck)
-        deckByName.set(deck.name.toLowerCase(), deck)
-        summary.decksCreated += 1
-      } else {
-        summary.decksMatched += 1
-
-        if (!deck.sourceKey) {
-          const updatedAt = nowIso()
-          await db.decks.update(deck.id, {
-            sourceKey,
-            updatedAt,
-            dirty: true
-          })
-
-          deck = {
-            ...deck,
-            sourceKey,
-            updatedAt,
-            dirty: true
-          }
-
-          deckBySourceKey.set(sourceKey, deck)
-          deckByName.set(deck.name.toLowerCase(), deck)
-        }
+        rememberDeck(deck)
+        createdDeckIds.add(deck.id)
+        return deck
       }
 
-      for (const importedCard of importedDeck.cards || []) {
-        const record = {
-          character: importedCard.character,
-          pinyin: importedCard.pinyin || '',
-          meaning: importedCard.meaning || '',
-          tags: normalizeTags(importedCard.tags)
+      const updates = {}
+
+      if (deck.sourceKey !== sourceKey) {
+        updates.sourceKey = sourceKey
+      }
+
+      if (!deck.description || deck.description === 'Imported from Pleco flashcards') {
+        updates.description = 'Linked to Pleco .txt refresh imports'
+      }
+
+      if (Object.keys(updates).length > 0) {
+        const updatedAt = nowIso()
+        await db.decks.update(deck.id, {
+          ...updates,
+          updatedAt,
+          dirty: true
+        })
+
+        deck = {
+          ...deck,
+          ...updates,
+          updatedAt,
+          dirty: true
+        }
+        rememberDeck(deck)
+      }
+
+      if (!createdDeckIds.has(deck.id)) {
+        refreshedDeckIds.add(deck.id)
+      }
+
+      return deck
+    }
+
+    for (const deck of decks) {
+      rememberDeck(deck)
+    }
+
+    for (const card of cards) {
+      rememberCard(card)
+    }
+
+    for (const importedCard of plecoCards) {
+      const record = {
+        character: importedCard.character,
+        pinyin: importedCard.pinyin || '',
+        meaning: importedCard.meaning || '',
+        deckName: String(importedCard.deckName || '').trim() || 'Pleco Import',
+        tags: normalizeTags(importedCard.tags)
+      }
+
+      const existingCard = findExistingCard(record)
+      const linkedDeck = await touchLinkedDeck(record.deckName, !existingCard)
+
+      if (existingCard) {
+        const updates = {}
+
+        if (!existingCard.pinyin && record.pinyin) {
+          updates.pinyin = record.pinyin
         }
 
-        const existingCard = findExistingCard(deck.id, record)
-        if (existingCard) {
-          if (!existingCard.id) {
-            summary.cardsSkipped += 1
-            continue
-          }
+        if (!existingCard.meaning && record.meaning) {
+          updates.meaning = record.meaning
+        }
 
-          const updates = {}
+        const mergedTags = mergeTagLists(existingCard.tags, record.tags)
+        if (mergedTags.length !== (existingCard.tags || []).length) {
+          updates.tags = mergedTags
+        }
 
-          if (!existingCard.pinyin && record.pinyin) {
-            updates.pinyin = record.pinyin
-          }
+        if (existingCard.deckId && linkedDeck && existingCard.deckId === linkedDeck.id && existingCard.deckSyncId !== linkedDeck.syncId) {
+          updates.deckSyncId = linkedDeck.syncId || null
+        }
 
-          if (!existingCard.meaning && record.meaning) {
-            updates.meaning = record.meaning
-          }
-
-          const mergedTags = mergeTagLists(existingCard.tags, record.tags)
-          if (mergedTags.length !== (existingCard.tags || []).length) {
-            updates.tags = mergedTags
-          }
-
-          if (Object.keys(updates).length === 0) {
-            summary.cardsSkipped += 1
-            continue
-          }
-
-          const updatedAt = nowIso()
-          const nextCard = {
-            ...existingCard,
-            ...updates,
-            updatedAt,
-            dirty: true
-          }
-
-          await db.cards.update(existingCard.id, {
-            ...updates,
-            updatedAt,
-            dirty: true
-          })
-
-          rememberCard(deck.id, nextCard)
-          summary.cardsUpdated += 1
+        if (Object.keys(updates).length === 0) {
+          summary.cardsSkipped += 1
           continue
         }
 
-        const createdAt = nowIso()
-        const card = {
-          syncId: createSyncId(),
-          character: record.character,
-          pinyin: record.pinyin,
-          meaning: record.meaning,
-          examples: [],
-          deckId: deck.id,
-          deckSyncId: deck.syncId || null,
-          tags: record.tags,
-          notes: '',
-          interval: 0,
-          repetitions: 0,
-          easeFactor: 2.5,
-          nextReview: createdAt,
-          lastReview: null,
-          writingScore: null,
-          writingCount: 0,
-          createdAt,
-          updatedAt: createdAt,
-          deletedAt: null,
-          dirty: true,
-          suspended: false
+        if (!existingCard.id) {
+          Object.assign(existingCard, updates)
+          rememberCard(existingCard)
+          continue
         }
 
-        cardsToAdd.push(card)
-        rememberCard(deck.id, card)
-        summary.cardsImported += 1
+        const updatedAt = nowIso()
+
+        await db.cards.update(existingCard.id, {
+          ...updates,
+          updatedAt,
+          dirty: true
+        })
+
+        Object.assign(existingCard, updates, {
+          updatedAt,
+          dirty: true
+        })
+        rememberCard(existingCard)
+        summary.cardsEnriched += 1
+        continue
       }
+
+      const createdAt = nowIso()
+      const card = {
+        syncId: createSyncId(),
+        character: record.character,
+        pinyin: record.pinyin,
+        meaning: record.meaning,
+        examples: [],
+        deckId: linkedDeck?.id || null,
+        deckSyncId: linkedDeck?.syncId || null,
+        tags: record.tags,
+        notes: '',
+        interval: 0,
+        repetitions: 0,
+        easeFactor: 2.5,
+        nextReview: createdAt,
+        lastReview: null,
+        writingScore: null,
+        writingCount: 0,
+        createdAt,
+        updatedAt: createdAt,
+        deletedAt: null,
+        dirty: true,
+        suspended: false
+      }
+
+      cardsToAdd.push(card)
+      rememberCard(card)
+      summary.cardsAdded += 1
     }
 
     if (cardsToAdd.length) {
@@ -987,8 +1040,15 @@ export async function importPlecoDecks(plecoDecks = []) {
       }
     }
 
+    summary.decksCreated = createdDeckIds.size
+    summary.decksRefreshed = refreshedDeckIds.size
+
     return summary
   })
+}
+
+export async function importPlecoDecks(plecoCards = []) {
+  return refreshPlecoLinkedDecks(plecoCards)
 }
 
 export async function getTodayReviewCount() {
