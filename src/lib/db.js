@@ -181,6 +181,50 @@ function buildCardSignature({ character, pinyin = '', meaning = '' }) {
   ])
 }
 
+function normalizeImportKeyPart(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+}
+
+function buildImportedCardLookupKeys({ character, pinyin = '', meaning = '' }) {
+  const normalizedCharacter = normalizeImportKeyPart(character)
+  const normalizedPinyin = normalizeImportKeyPart(pinyin)
+  const normalizedMeaning = normalizeImportKeyPart(meaning)
+
+  return [
+    normalizedCharacter && normalizedPinyin && normalizedMeaning
+      ? `full:${normalizedCharacter}::${normalizedPinyin}::${normalizedMeaning}`
+      : null,
+    normalizedCharacter && normalizedPinyin
+      ? `char-pinyin:${normalizedCharacter}::${normalizedPinyin}`
+      : null,
+    normalizedCharacter && normalizedMeaning
+      ? `char-meaning:${normalizedCharacter}::${normalizedMeaning}`
+      : null
+  ].filter(Boolean)
+}
+
+function mergeTagLists(existingTags = [], nextTags = []) {
+  const merged = []
+  const seen = new Set()
+
+  for (const value of [...existingTags, ...nextTags]) {
+    const tag = String(value || '').trim()
+    const normalized = tag.toLowerCase()
+
+    if (!normalized || seen.has(normalized)) {
+      continue
+    }
+
+    seen.add(normalized)
+    merged.push(tag)
+  }
+
+  return merged
+}
+
 function getLatestTimestamp(values) {
   return values.filter(Boolean).sort().at(-1) || null
 }
@@ -725,6 +769,226 @@ export async function repairDeckCards(deckId, wordsArray, tags = []) {
     addedCount: missingCards.length,
     totalCount: existingSignatures.size + missingCards.length
   }
+}
+
+export async function importPlecoDecks(plecoDecks = []) {
+  if (!Array.isArray(plecoDecks) || plecoDecks.length === 0) {
+    return {
+      decksCreated: 0,
+      decksMatched: 0,
+      cardsImported: 0,
+      cardsUpdated: 0,
+      cardsSkipped: 0
+    }
+  }
+
+  return db.transaction('rw', [db.decks, db.cards], async () => {
+    const decks = (await db.decks.toArray()).filter(isActiveRecord)
+    const cards = (await db.cards.toArray()).filter(isActiveRecord)
+    const deckBySourceKey = new Map()
+    const deckByName = new Map()
+    const deckBuckets = new Map()
+    const cardsToAdd = []
+    const summary = {
+      decksCreated: 0,
+      decksMatched: 0,
+      cardsImported: 0,
+      cardsUpdated: 0,
+      cardsSkipped: 0
+    }
+
+    function ensureDeckBucket(deckId) {
+      if (!deckBuckets.has(deckId)) {
+        deckBuckets.set(deckId, { byKey: new Map() })
+      }
+
+      return deckBuckets.get(deckId)
+    }
+
+    function rememberCard(deckId, card) {
+      const bucket = ensureDeckBucket(deckId)
+
+      for (const key of buildImportedCardLookupKeys(card)) {
+        if (!bucket.byKey.has(key)) {
+          bucket.byKey.set(key, card)
+        }
+      }
+    }
+
+    function findExistingCard(deckId, importedCard) {
+      const bucket = ensureDeckBucket(deckId)
+
+      for (const key of buildImportedCardLookupKeys(importedCard)) {
+        const match = bucket.byKey.get(key)
+        if (match) {
+          return match
+        }
+      }
+
+      return null
+    }
+
+    for (const deck of decks) {
+      if (deck.sourceKey) {
+        deckBySourceKey.set(deck.sourceKey, deck)
+      }
+
+      if (deck.kind === 'custom' || !deck.sourceKey || String(deck.sourceKey).startsWith('pleco:')) {
+        deckByName.set(deck.name.toLowerCase(), deck)
+      }
+    }
+
+    for (const card of cards) {
+      if (card.deckId) {
+        rememberCard(card.deckId, card)
+      }
+    }
+
+    for (const importedDeck of plecoDecks) {
+      const deckName = String(importedDeck?.name || '').trim() || 'Pleco Import'
+      const sourceKey = `pleco:${slugify(deckName)}`
+      let deck = deckBySourceKey.get(sourceKey) || deckByName.get(deckName.toLowerCase()) || null
+
+      if (!deck) {
+        const createdAt = nowIso()
+        const metadata = normalizeDeckMetadata({
+          name: deckName,
+          kind: 'custom',
+          sourceKey,
+          description: 'Imported from Pleco flashcards'
+        })
+
+        const newDeck = {
+          syncId: createSyncId(),
+          ...metadata,
+          createdAt,
+          updatedAt: createdAt,
+          deletedAt: null,
+          dirty: true
+        }
+
+        const deckId = await db.decks.add(newDeck)
+        deck = { ...newDeck, id: deckId }
+        deckBySourceKey.set(sourceKey, deck)
+        deckByName.set(deck.name.toLowerCase(), deck)
+        summary.decksCreated += 1
+      } else {
+        summary.decksMatched += 1
+
+        if (!deck.sourceKey) {
+          const updatedAt = nowIso()
+          await db.decks.update(deck.id, {
+            sourceKey,
+            updatedAt,
+            dirty: true
+          })
+
+          deck = {
+            ...deck,
+            sourceKey,
+            updatedAt,
+            dirty: true
+          }
+
+          deckBySourceKey.set(sourceKey, deck)
+          deckByName.set(deck.name.toLowerCase(), deck)
+        }
+      }
+
+      for (const importedCard of importedDeck.cards || []) {
+        const record = {
+          character: importedCard.character,
+          pinyin: importedCard.pinyin || '',
+          meaning: importedCard.meaning || '',
+          tags: normalizeTags(importedCard.tags)
+        }
+
+        const existingCard = findExistingCard(deck.id, record)
+        if (existingCard) {
+          if (!existingCard.id) {
+            summary.cardsSkipped += 1
+            continue
+          }
+
+          const updates = {}
+
+          if (!existingCard.pinyin && record.pinyin) {
+            updates.pinyin = record.pinyin
+          }
+
+          if (!existingCard.meaning && record.meaning) {
+            updates.meaning = record.meaning
+          }
+
+          const mergedTags = mergeTagLists(existingCard.tags, record.tags)
+          if (mergedTags.length !== (existingCard.tags || []).length) {
+            updates.tags = mergedTags
+          }
+
+          if (Object.keys(updates).length === 0) {
+            summary.cardsSkipped += 1
+            continue
+          }
+
+          const updatedAt = nowIso()
+          const nextCard = {
+            ...existingCard,
+            ...updates,
+            updatedAt,
+            dirty: true
+          }
+
+          await db.cards.update(existingCard.id, {
+            ...updates,
+            updatedAt,
+            dirty: true
+          })
+
+          rememberCard(deck.id, nextCard)
+          summary.cardsUpdated += 1
+          continue
+        }
+
+        const createdAt = nowIso()
+        const card = {
+          syncId: createSyncId(),
+          character: record.character,
+          pinyin: record.pinyin,
+          meaning: record.meaning,
+          examples: [],
+          deckId: deck.id,
+          deckSyncId: deck.syncId || null,
+          tags: record.tags,
+          notes: '',
+          interval: 0,
+          repetitions: 0,
+          easeFactor: 2.5,
+          nextReview: createdAt,
+          lastReview: null,
+          writingScore: null,
+          writingCount: 0,
+          createdAt,
+          updatedAt: createdAt,
+          deletedAt: null,
+          dirty: true,
+          suspended: false
+        }
+
+        cardsToAdd.push(card)
+        rememberCard(deck.id, card)
+        summary.cardsImported += 1
+      }
+    }
+
+    if (cardsToAdd.length) {
+      const batchSize = 100
+      for (let index = 0; index < cardsToAdd.length; index += batchSize) {
+        await db.cards.bulkAdd(cardsToAdd.slice(index, index + batchSize))
+      }
+    }
+
+    return summary
+  })
 }
 
 export async function getTodayReviewCount() {

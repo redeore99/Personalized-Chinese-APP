@@ -20,28 +20,42 @@ If you keep a private local schema, keep it structurally aligned with the latest
 - Supabase stores the account and synced study data.
 - Dexie/IndexedDB stores the local browser cache.
 - Encrypted backups store a portable offline copy of the local cache.
+- Pleco deck import is file-based. You can keep the export in Google Drive, but the app imports the file you choose locally.
 
 ## First-Time Setup
 1. Create a Supabase project.
 2. Open Supabase SQL Editor.
 3. Run `supabase/schema.local.sql` if you want to keep the real allowed email out of the public repo.
 4. If you do not use the local-only file, replace the placeholder email in `supabase/schema.sql` and run that instead.
-5. In Supabase Authentication, keep email/password enabled.
+5. In Supabase Auth settings, keep email/password enabled.
 6. Disable public signups.
-7. Manually create the one allowed user account.
-8. In Supabase Settings -> API Keys, copy the `Publishable key`.
-9. Build the project URL as `https://<project-ref>.supabase.co` or copy it from Supabase project settings.
-10. In Vercel Project Settings -> Environment Variables, add:
+7. Review the current Supabase password rate-limit or bot-protection controls and keep them enabled. The app now adds a browser-local cooldown after repeated failures, but Supabase still needs to be the real brute-force defense.
+8. Manually create the one allowed user account and give it a long unique password.
+9. In Supabase Settings -> API Keys, copy the `Publishable key`.
+10. Build the project URL as `https://<project-ref>.supabase.co` or copy it from Supabase project settings.
+11. In Vercel Project Settings -> Environment Variables, add:
 
 ```env
 VITE_SUPABASE_URL=https://<project-ref>.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
 ```
 
-11. Save the Vercel env vars and redeploy.
-12. Open the deployed app and sign in with the manually created account.
-13. On each older browser that already has local study data, sign in there too and run `Sync Now`. The latest app will automatically do a deeper full-library reconcile if local and cloud counts still disagree.
-14. If you deploy the latest library-management and sync-hardening update, rerun the latest schema SQL in Supabase so the new deck metadata columns (`slug`, `description`, `kind`, `source_key`, `color`, `sort_order`) and the server-side sync-protection triggers are applied before you rely on cross-device organization and deletion sync.
+12. Save the Vercel env vars and redeploy.
+13. Open the deployed app and sign in with the manually created account.
+14. On each older browser that already has local study data, sign in there too and run `Sync Now`. The latest app will automatically do a deeper full-library reconcile if local and cloud counts still disagree.
+15. If you deploy the latest library-management and sync-hardening update, rerun the latest schema SQL in Supabase so the new deck metadata columns (`slug`, `description`, `kind`, `source_key`, `color`, `sort_order`) and the server-side sync-protection triggers are applied before you rely on cross-device organization and deletion sync.
+
+## Using Pleco Deck Import
+1. In Pleco flashcards, export the cards you want as a text, TSV, or CSV file.
+2. Save or share that file somewhere your phone or computer can open. Google Drive is fine as storage.
+3. In the app, open `Settings`.
+4. Use `Import From Pleco` and choose the exported file.
+5. The import is one-way and merge-based:
+   - Missing decks are created automatically.
+   - Existing matching custom decks are reused.
+   - Repeated imports skip duplicates and can fill in missing pinyin or meaning on existing cards.
+   - The first Pleco category becomes the deck in this app, and extra categories become tags.
+6. Run `Sync Now` if you want the imported cards uploaded to Supabase for your other devices.
 
 ## Optional Local Development
 Local development is not required just to use the deployed app, but it is useful when making or testing code changes.
@@ -79,6 +93,7 @@ These external systems matter after code changes:
   - `VITE_SUPABASE_PUBLISHABLE_KEY`
 - Never use the Supabase secret key or service role key in this frontend app.
 - The browser stores a session token after login, not the user's password.
+- The app now adds a device-local cooldown after repeated failed password attempts, but that is only a speed bump. Supabase Auth rate limits or bot protection should stay enabled because the real attack surface is the server endpoint.
 - Encrypted backups use a separate backup password and do not replace account security.
 
 ## If Something Looks Wrong
@@ -89,6 +104,11 @@ These external systems matter after code changes:
   If you use `supabase/schema.local.sql`, rerun the latest version of that file in Supabase SQL Editor.
   Otherwise rerun `supabase/schema.sql`.
   That recreates `public.is_allowed_user()` with the current `auth.users`-based check and restores the execute grant for `authenticated`.
+- Someone keeps trying passwords against the login screen
+  Double-check that public signups are still disabled in Supabase.
+  Review the current Supabase Auth password rate-limit or bot-protection settings and keep them enabled.
+  Change the account password to a long unique one if you suspect it has been exposed.
+  The app now slows repeated failures from the same browser, but direct attacks still have to be stopped by Supabase.
 - App stays on "Checking your session"
   Redeploy the latest code, then fully close and reopen the installed PWA or refresh the browser tab so the updated auth bootstrap is loaded.
 - Installed mobile app is still showing the old UI after a deploy
@@ -110,5 +130,9 @@ These external systems matter after code changes:
   Rerun the latest `supabase/schema.local.sql` or `supabase/schema.sql` in Supabase SQL Editor.
   The current app can still sync with the legacy deck shape, but the richer deck metadata only syncs completely after those columns exist in Supabase.
   Then press `Sync Now` on the fuller device first, followed by the other devices.
+- Pleco import created fewer decks than expected
+  This app currently supports one deck per card.
+  The first Pleco category becomes the deck, while additional Pleco categories are saved as tags on that card.
+  If Pleco exported cards without category columns, the app groups them into a single `Pleco Import` deck.
 - Repo changes are live in GitHub but not in production
   Make sure Vercel redeployed the latest commit and that env var changes were applied to a fresh deployment.

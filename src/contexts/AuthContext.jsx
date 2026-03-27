@@ -3,6 +3,12 @@ import { isSupabaseConfigured, supabase } from '../lib/supabase'
 
 const AuthContext = createContext(null)
 const AUTH_TIMEOUT_MS = 10000
+const AUTH_GUARD_STORAGE_KEY = 'hanzi-study-auth-guard'
+const AUTH_GUARD_STEPS = [
+  { failures: 5, durationMs: 30_000 },
+  { failures: 8, durationMs: 120_000 },
+  { failures: 10, durationMs: 600_000 }
+]
 
 function withTimeout(promise, timeoutMessage) {
   return Promise.race([
@@ -15,10 +21,108 @@ function withTimeout(promise, timeoutMessage) {
   ])
 }
 
+function formatDuration(ms) {
+  const totalSeconds = Math.max(1, Math.ceil(ms / 1000))
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+
+  if (minutes && seconds) {
+    return `${minutes}m ${seconds}s`
+  }
+
+  if (minutes) {
+    return `${minutes}m`
+  }
+
+  return `${seconds}s`
+}
+
+function readAuthGuard() {
+  if (typeof window === 'undefined') {
+    return { failedAttempts: 0, lockedUntil: null }
+  }
+
+  try {
+    const savedValue = window.localStorage.getItem(AUTH_GUARD_STORAGE_KEY)
+    if (!savedValue) {
+      return { failedAttempts: 0, lockedUntil: null }
+    }
+
+    const parsed = JSON.parse(savedValue)
+    return {
+      failedAttempts: Number(parsed.failedAttempts) || 0,
+      lockedUntil: Number(parsed.lockedUntil) || null
+    }
+  } catch {
+    return { failedAttempts: 0, lockedUntil: null }
+  }
+}
+
+function writeAuthGuard(guard) {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  try {
+    window.localStorage.setItem(AUTH_GUARD_STORAGE_KEY, JSON.stringify(guard))
+  } catch {
+    // Ignore storage write failures and keep the in-memory guard.
+  }
+}
+
+function getAuthLockRemainingMs(guard) {
+  if (!guard?.lockedUntil) {
+    return 0
+  }
+
+  return Math.max(0, guard.lockedUntil - Date.now())
+}
+
+function clearExpiredLock(guard) {
+  if (getAuthLockRemainingMs(guard) > 0) {
+    return guard
+  }
+
+  if (!guard?.lockedUntil) {
+    return guard
+  }
+
+  return {
+    ...guard,
+    lockedUntil: null
+  }
+}
+
+function getCooldownDuration(failedAttempts) {
+  return AUTH_GUARD_STEPS.reduce((currentDuration, step) => (
+    failedAttempts >= step.failures ? step.durationMs : currentDuration
+  ), 0)
+}
+
+function registerFailedAttempt(guard) {
+  const failedAttempts = (guard?.failedAttempts || 0) + 1
+  const durationMs = getCooldownDuration(failedAttempts)
+
+  return {
+    failedAttempts,
+    lockedUntil: durationMs ? Date.now() + durationMs : null
+  }
+}
+
+function shouldCountFailedAttempt(error) {
+  const message = String(error?.message || '').toLowerCase()
+  if (!message) {
+    return true
+  }
+
+  return !['network', 'fetch', 'timed out', 'timeout'].some(fragment => message.includes(fragment))
+}
+
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
   const [authError, setAuthError] = useState('')
+  const [authGuard, setAuthGuard] = useState(() => clearExpiredLock(readAuthGuard()))
 
   useEffect(() => {
     if (!isSupabaseConfigured() || !supabase) {
@@ -117,13 +221,72 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
+  useEffect(() => {
+    const nextGuard = clearExpiredLock(readAuthGuard())
+    writeAuthGuard(nextGuard)
+    setAuthGuard(nextGuard)
+  }, [])
+
+  useEffect(() => {
+    if (!authGuard.lockedUntil) {
+      return undefined
+    }
+
+    const interval = window.setInterval(() => {
+      const nextGuard = clearExpiredLock(readAuthGuard())
+      writeAuthGuard(nextGuard)
+      setAuthGuard(nextGuard)
+    }, 1000)
+
+    return () => {
+      window.clearInterval(interval)
+    }
+  }, [authGuard.lockedUntil])
+
   const signInWithPassword = async ({ email, password }) => {
     if (!supabase) {
       return { error: new Error('Supabase is not configured.') }
     }
 
+    const currentGuard = clearExpiredLock(readAuthGuard())
+    writeAuthGuard(currentGuard)
+    setAuthGuard(currentGuard)
+
+    const lockRemainingMs = getAuthLockRemainingMs(currentGuard)
+    if (lockRemainingMs > 0) {
+      return {
+        error: new Error(`Too many sign-in attempts on this device. Wait ${formatDuration(lockRemainingMs)} and try again.`)
+      }
+    }
+
     setAuthError('')
-    return supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password })
+    const result = await supabase.auth.signInWithPassword({
+      email: email.trim().toLowerCase(),
+      password
+    })
+
+    if (result.error) {
+      if (shouldCountFailedAttempt(result.error)) {
+        const nextGuard = registerFailedAttempt(currentGuard)
+        writeAuthGuard(nextGuard)
+        setAuthGuard(nextGuard)
+
+        const nextLockRemainingMs = getAuthLockRemainingMs(nextGuard)
+        if (nextLockRemainingMs > 0) {
+          return {
+            ...result,
+            error: new Error(`${result.error.message} Too many failed attempts on this device. Wait ${formatDuration(nextLockRemainingMs)} and try again.`)
+          }
+        }
+      }
+
+      return result
+    }
+
+    const resetGuard = { failedAttempts: 0, lockedUntil: null }
+    writeAuthGuard(resetGuard)
+    setAuthGuard(resetGuard)
+    return result
   }
 
   const signOut = async () => {
@@ -144,7 +307,8 @@ export function AuthProvider({ children }) {
         signInWithPassword,
         signOut,
         clearAuthError: () => setAuthError(''),
-        isConfigured: isSupabaseConfigured()
+        isConfigured: isSupabaseConfigured(),
+        authLockRemainingMs: getAuthLockRemainingMs(authGuard)
       }}
     >
       {children}

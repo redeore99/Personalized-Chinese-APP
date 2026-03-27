@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { exportBackup, importBackup, downloadBlob } from '../lib/backup'
-import { getLocalDataCounts } from '../lib/db'
+import { getLocalDataCounts, importPlecoDecks } from '../lib/db'
 import { useAuth } from '../contexts/AuthContext'
 import { useSync } from '../contexts/SyncContext'
 import { getCloudDataCounts } from '../lib/sync'
+import { parsePlecoImportFile } from '../lib/plecoImport'
 
 function formatTimestamp(value) {
   if (!value) return 'Not yet'
@@ -16,6 +17,43 @@ function formatSyncStatus(status, error) {
   return 'Idle'
 }
 
+function formatCount(count, singular, plural = `${singular}s`) {
+  return `${count} ${count === 1 ? singular : plural}`
+}
+
+function buildPlecoImportMessage(parsed, result) {
+  const parts = [
+    `Parsed ${formatCount(parsed.cardCount, 'card')} from ${formatCount(parsed.deckCount, 'Pleco deck')}.`
+  ]
+
+  if (result.cardsImported) {
+    parts.push(`Imported ${formatCount(result.cardsImported, 'new card')}.`)
+  }
+
+  if (result.cardsUpdated) {
+    parts.push(`Updated ${formatCount(result.cardsUpdated, 'existing card')} with missing Pleco details.`)
+  }
+
+  if (result.cardsSkipped) {
+    parts.push(`Skipped ${formatCount(result.cardsSkipped, 'duplicate card')}.`)
+  }
+
+  if (result.decksCreated) {
+    parts.push(`Created ${formatCount(result.decksCreated, 'deck')}.`)
+  }
+
+  if (result.decksMatched) {
+    parts.push(`Reused ${formatCount(result.decksMatched, 'existing deck')}.`)
+  }
+
+  if (parsed.invalidRowCount) {
+    parts.push(`Ignored ${formatCount(parsed.invalidRowCount, 'incomplete row')}.`)
+  }
+
+  parts.push('Run "Sync Now" if you want these imported cards uploaded to Supabase.')
+  return parts.join(' ')
+}
+
 export default function SettingsPage({ onRefresh }) {
   const { user, signOut } = useAuth()
   const { status: syncStatus, error: syncError, lastSyncedAt, lastReconciledAt, syncNow } = useSync()
@@ -23,6 +61,7 @@ export default function SettingsPage({ onRefresh }) {
   const [backupPassword, setBackupPassword] = useState('')
   const [status, setStatus] = useState(null) // { type: 'success'|'error', message }
   const [importing, setImporting] = useState(false)
+  const [importingPleco, setImportingPleco] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [syncingNow, setSyncingNow] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
@@ -41,6 +80,7 @@ export default function SettingsPage({ onRefresh }) {
   const [loadingCloudCounts, setLoadingCloudCounts] = useState(false)
 
   const fileInputRef = useRef(null)
+  const plecoFileInputRef = useRef(null)
 
   const refreshLocalCounts = async () => {
     const counts = await getLocalDataCounts()
@@ -171,6 +211,29 @@ export default function SettingsPage({ onRefresh }) {
     setSigningOut(false)
   }
 
+  const handlePlecoImport = async file => {
+    setImportingPleco(true)
+    setStatus(null)
+
+    try {
+      const parsed = await parsePlecoImportFile(file)
+      const result = await importPlecoDecks(parsed.decks)
+
+      setStatus({
+        type: 'success',
+        message: buildPlecoImportMessage(parsed, result)
+      })
+
+      await refreshLocalCounts()
+      onRefresh?.()
+    } catch (err) {
+      setStatus({ type: 'error', message: 'Pleco import failed: ' + err.message })
+    }
+
+    setImportingPleco(false)
+    if (plecoFileInputRef.current) plecoFileInputRef.current.value = ''
+  }
+
   const countsMatch = (
     localCounts.cards === cloudCounts.cards &&
     localCounts.decks === cloudCounts.decks &&
@@ -280,6 +343,32 @@ export default function SettingsPage({ onRefresh }) {
           disabled={exporting}
         >
           {exporting ? 'Encrypting...' : 'Export Encrypted Backup'}
+        </button>
+      </div>
+
+      <div className="card" style={{ marginBottom: 12 }}>
+        <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Import From Pleco</h3>
+        <p className="text-secondary" style={{ fontSize: 13, marginBottom: 12, lineHeight: 1.5 }}>
+          One-way merge import for Pleco flashcards. Export a Pleco text, TSV, or CSV file, then pick it here. Google Drive is fine as storage, but the app imports the file you choose from this device instead of connecting to Drive directly.
+        </p>
+        <p className="text-secondary" style={{ fontSize: 13, marginBottom: 12, lineHeight: 1.5 }}>
+          The first Pleco category becomes the deck in this app. If a card belongs to extra Pleco categories, those extra categories are saved as tags.
+        </p>
+        <input
+          ref={plecoFileInputRef}
+          type="file"
+          accept=".txt,.tsv,.csv,text/plain,text/csv"
+          style={{ display: 'none' }}
+          onChange={event => {
+            if (event.target.files[0]) handlePlecoImport(event.target.files[0])
+          }}
+        />
+        <button
+          className="btn btn-secondary btn-sm"
+          onClick={() => plecoFileInputRef.current?.click()}
+          disabled={importingPleco}
+        >
+          {importingPleco ? 'Importing Pleco...' : 'Import Pleco Export'}
         </button>
       </div>
 

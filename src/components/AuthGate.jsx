@@ -1,6 +1,22 @@
 import { useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 
+function formatDuration(ms) {
+  const totalSeconds = Math.max(1, Math.ceil(ms / 1000))
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+
+  if (minutes && seconds) {
+    return `${minutes}m ${seconds}s`
+  }
+
+  if (minutes) {
+    return `${minutes}m`
+  }
+
+  return `${seconds}s`
+}
+
 function AuthSetupScreen() {
   return (
     <div className="auth-screen">
@@ -23,7 +39,15 @@ function AuthSetupScreen() {
 }
 
 export default function AuthGate({ children }) {
-  const { loading, session, signInWithPassword, isConfigured, authError, clearAuthError } = useAuth()
+  const {
+    loading,
+    session,
+    signInWithPassword,
+    isConfigured,
+    authError,
+    clearAuthError,
+    authLockRemainingMs
+  } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -108,12 +132,22 @@ export default function AuthGate({ children }) {
             />
           </div>
 
+          {authLockRemainingMs > 0 && (
+            <div className="auth-message auth-message-error">
+              This browser is cooling down after repeated sign-in attempts. Wait {formatDuration(authLockRemainingMs)} before trying again.
+            </div>
+          )}
+
           {(authError || error) && (
             <div className="auth-message auth-message-error">{authError || error}</div>
           )}
 
-          <button className="btn btn-primary btn-block" type="submit" disabled={submitting}>
-            {submitting ? 'Signing in...' : 'Sign In'}
+          <button
+            className="btn btn-primary btn-block"
+            type="submit"
+            disabled={submitting || authLockRemainingMs > 0}
+          >
+            {submitting ? 'Signing in...' : authLockRemainingMs > 0 ? `Wait ${formatDuration(authLockRemainingMs)}` : 'Sign In'}
           </button>
         </form>
       </div>

@@ -32,7 +32,7 @@ The old local PIN lock system has been removed. Do not describe it as the curren
 - `src/components/PlecoLookupButton.jsx`
   Renders the shared "Open in Pleco" control for study flows and shows a desktop hint when the device is not mobile.
 - `src/contexts/AuthContext.jsx`
-  Loads the Supabase session, signs in with email/password, signs out, rejects unauthorized accounts, and defers Supabase auth-event work outside the auth callback to avoid deadlocks.
+  Loads the Supabase session, signs in with email/password, signs out, rejects unauthorized accounts, defers Supabase auth-event work outside the auth callback to avoid deadlocks, and applies a device-local cooldown after repeated failed password attempts.
 - `src/contexts/SyncContext.jsx`
   Runs cloud sync on login, on focus, every 30 seconds, restores saved sync timestamps, and exposes a single manual sync/reconcile action from Settings.
 - `src/lib/deckCatalog.js`
@@ -42,8 +42,10 @@ The old local PIN lock system has been removed. Do not describe it as the curren
   It also accepts legacy `VITE_SUPABASE_ANON_KEY` as a fallback.
 - `src/lib/pleco.js`
   Builds Pleco deep-link URLs and detects whether the current device looks mobile enough to offer the live app shortcut.
+- `src/lib/plecoImport.js`
+  Parses Pleco text, TSV, and CSV exports for one-way deck import, maps the first Pleco category to the target deck, and keeps extra categories as tags.
 - `src/lib/db.js`
-  Dexie schema plus local CRUD helpers. It now stores richer deck metadata, supports card browsing/editing queries, and exposes recent study activity helpers alongside the sync metadata fields such as `syncId`, `updatedAt`, `dirty`, and `deletedAt`.
+  Dexie schema plus local CRUD helpers. It now stores richer deck metadata, supports card browsing/editing queries, merges Pleco imports into matching custom decks, and exposes recent study activity helpers alongside the sync metadata fields such as `syncId`, `updatedAt`, `dirty`, and `deletedAt`.
 - `src/lib/sync.js`
   Pulls remote rows into Dexie, pushes dirty local rows to Supabase, can report cloud counts, automatically runs a full-library reconcile when local and cloud counts still disagree, treats deletions as tombstones so stale undeleted rows do not resurrect records, and falls back to the legacy deck shape until the latest Supabase deck columns have been applied.
 - `src/lib/backup.js`
@@ -57,7 +59,7 @@ The old local PIN lock system has been removed. Do not describe it as the curren
 - `src/pages/AddCardPage.jsx`
   Card creation form with deck assignment at save time.
 - `src/pages/SettingsPage.jsx`
-  Shows account status, sync actions, backup export/import, and local data counts.
+  Shows account status, sync actions, Pleco import, backup export/import, and local/cloud data counts.
 - `supabase/schema.sql`
   Public generic SQL schema with placeholder email, owner-scoped sync tables, deck metadata columns, and server-side sync guards that protect newer tombstones and newer `updated_at` values.
 - `supabase/schema.local.sql`
@@ -81,6 +83,7 @@ The old local PIN lock system has been removed. Do not describe it as the curren
   - `VITE_SUPABASE_PUBLISHABLE_KEY`
 - Never put a Supabase secret key or service role key in frontend code, tracked files, or Vercel env meant for the client bundle.
 - The browser stores a session token after login. It should not store the user's password.
+- The sign-in UI now adds a device-local cooldown after repeated failed password attempts, but Supabase Auth rate limits or bot protection must still stay enabled because the real attack surface is the server endpoint.
 - Backups are encrypted with AES-256-GCM using a separate backup password and only contain the local study cache.
 - Backups do not include Supabase auth state, session tokens, or the removed legacy PIN metadata.
 - `src/lib/db.js` still contains a legacy `security` table only so old IndexedDB upgrades remain compatible. It is not the active auth system.
@@ -130,10 +133,12 @@ Working now:
 - home dashboard recent activity and deck focus summaries
 - deck-specific browse/review entry points
 - Pleco deep-link lookup from active review and writing sessions on mobile
+- one-way Pleco deck import from exported text, TSV, or CSV files, with repeated imports skipping duplicates and filling missing pinyin or meaning when possible
 - manual `Sync Now` with automatic full reconcile when counts drift
 - cloud vs local counts visible in Settings for sync troubleshooting
 - prebuilt deck repair when a device has only a partial local import
 - encrypted local backup export/import with a separate backup password
+- browser-local cooldown after repeated failed sign-in attempts
 - mobile-friendly PWA deployment on Vercel
 - eager PWA update registration so installed mobile builds refresh more reliably
 
@@ -148,4 +153,5 @@ Still missing or incomplete:
 - Run or request a build verification when code changed.
 - Search for stale references to removed architecture, especially the old PIN model.
 - Check whether setup docs still match the current env vars, auth flow, and deployment flow.
+- Check whether the Supabase Auth hardening guidance still matches the current dashboard controls for password rate limits or bot protection.
 - Check whether the user needs manual follow-up in Supabase, Vercel, or GitHub.
