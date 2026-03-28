@@ -1106,6 +1106,13 @@ export async function refreshPlecoLinkedDecks(plecoCards = []) {
 
         if (!existingCard.pinyin && record.pinyin) {
           updates.pinyin = record.pinyin
+        } else if (existingCard.pinyin && record.pinyin && existingCard.pinyin !== record.pinyin) {
+          // Replace numbered-tone pinyin with accented version from a fresh import
+          const hasNumberedTones = /[1-5]/.test(existingCard.pinyin)
+          const importHasAccents = /[āáǎàēéěèīíǐìōóǒòūúǔùǖǘǚǜ]/i.test(record.pinyin)
+          if (hasNumberedTones && importHasAccents) {
+            updates.pinyin = record.pinyin
+          }
         }
 
         if (!existingCard.meaning && record.meaning) {

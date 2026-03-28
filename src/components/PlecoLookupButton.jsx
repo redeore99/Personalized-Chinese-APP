@@ -1,6 +1,6 @@
-import { buildPlecoDefinitionUrl, isLikelyMobileDevice } from '../lib/pleco'
+import { buildPlecoSearchUrl, isLikelyMobileDevice } from '../lib/pleco'
 
-export default function PlecoLookupButton({ character, pinyin = '' }) {
+export default function PlecoLookupButton({ character }) {
   const normalizedCharacter = character?.trim()
 
   if (!normalizedCharacter) {
@@ -8,10 +8,7 @@ export default function PlecoLookupButton({ character, pinyin = '' }) {
   }
 
   const isMobile = isLikelyMobileDevice()
-  const plecoUrl = buildPlecoDefinitionUrl({
-    character: normalizedCharacter,
-    pinyin
-  })
+  const plecoUrl = buildPlecoSearchUrl({ character: normalizedCharacter })
 
   return (
     <div className="pleco-link-row">

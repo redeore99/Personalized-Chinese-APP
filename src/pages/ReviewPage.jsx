@@ -204,14 +204,20 @@ export default function ReviewPage({ onRefresh }) {
             <div style={{ fontSize: 24, color: 'var(--accent)', marginBottom: 4 }}>
               {currentCard?.pinyin}
             </div>
-            <div style={{ fontSize: 20, color: 'var(--text-primary)', marginBottom: 16 }}>
+            <div style={{
+              fontSize: 16,
+              lineHeight: 1.5,
+              color: 'var(--text-primary)',
+              marginBottom: 16,
+              maxHeight: 160,
+              overflowY: 'auto',
+              textAlign: 'left',
+              width: '100%'
+            }}>
               {currentCard?.meaning}
             </div>
 
-            <PlecoLookupButton
-              character={currentCard?.character}
-              pinyin={currentCard?.pinyin}
-            />
+            <PlecoLookupButton character={currentCard?.character} />
 
             {currentCard?.examples?.length > 0 && (
               <div style={{

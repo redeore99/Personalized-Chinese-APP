@@ -842,7 +842,12 @@ textarea.input {
 
 .write-prompt-meaning {
   font-size: 15px;
+  line-height: 1.5;
   color: var(--text-secondary);
+  max-height: 140px;
+  overflow-y: auto;
+  text-align: left;
+  width: 100%;
 }
 
 /* Character slots for multi-char words */

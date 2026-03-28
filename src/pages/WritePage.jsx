@@ -373,7 +373,7 @@ export default function WritePage({ onRefresh }) {
         <div className="write-prompt-label">Write this word</div>
         <div className="write-prompt-pinyin">{currentCard.pinyin}</div>
         <div className="write-prompt-meaning">{currentCard.meaning}</div>
-        <PlecoLookupButton character={currentCard.character} pinyin={currentCard.pinyin} />
+        <PlecoLookupButton character={currentCard.character} />
       </div>
 
       {/* Character slots — shows which character you're on */}

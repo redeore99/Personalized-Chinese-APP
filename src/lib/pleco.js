@@ -1,17 +1,8 @@
 const MOBILE_USER_AGENT_PATTERN = /Android|iPhone|iPad|iPod/i
 
-export function buildPlecoDefinitionUrl({ character, pinyin = '' }) {
-  const params = new URLSearchParams({
-    hw: character.trim(),
-    sec: 'dict'
-  })
-
-  const normalizedPinyin = pinyin.trim()
-  if (normalizedPinyin) {
-    params.set('py', normalizedPinyin)
-  }
-
-  return `plecoapi://x-callback-url/df?${params.toString()}`
+export function buildPlecoSearchUrl({ character }) {
+  const query = character.trim()
+  return `plecoapi://x-callback-url/s?q=${encodeURIComponent(query)}`
 }
 
 export function isLikelyMobileDevice() {
