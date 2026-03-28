@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { DECK_FILTER_UNASSIGNED, getDecksWithCounts, getStandaloneCardSummary, getStudyActivity } from '../lib/db'
+import { convertNumberedPinyin } from '../lib/pinyin'
 
 function formatRelativeTime(value) {
   if (!value) return 'Never'
@@ -138,7 +139,7 @@ export default function HomePage({ stats, onRefresh }) {
                       <span className={`badge badge-${item.type}`}>{activityLabel(item)}</span>
                     </div>
                     <div className="text-secondary" style={{ fontSize: 14 }}>
-                      {item.pinyin || 'No pinyin'}{item.meaning ? ` · ${item.meaning}` : ''}
+                      {convertNumberedPinyin(item.pinyin) || 'No pinyin'}{item.meaning ? ` · ${item.meaning}` : ''}
                     </div>
                     <div className="activity-meta">
                       <span>{item.deckName || 'Standalone'}</span>

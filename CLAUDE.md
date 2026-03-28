@@ -46,6 +46,8 @@ The old local PIN lock system has been removed. Do not describe it as the curren
   Exposes the public `VITE_TURNSTILE_SITE_KEY` and loads the Cloudflare Turnstile browser script on demand for the auth screen.
 - `src/lib/pleco.js`
   Builds Pleco search URLs using `plecoapi://x-callback-url/s?q=...` so both single words and full sentences open correctly, and detects whether the current device looks mobile enough to offer the live app shortcut.
+- `src/lib/pinyin.js`
+  Shared pinyin utility that converts numbered-tone pinyin (e.g. `ni3 hao3`) to accented pinyin (e.g. `nǐ hǎo`). Used by both the Pleco import pipeline and the display layer so all pinyin renders with proper tone marks regardless of what is stored in the database.
 - `src/lib/plecoImport.js`
   Parses Pleco `.txt` exports for linked manual refresh, including Pleco's tab-separated flashcard export format with `// Section` markers, unions repeated rows into unique cards, maps one primary Pleco category to the target deck, keeps extra categories as tags, ignores suspicious category values that look like full flashcard text, and converts numbered-tone pinyin (e.g. `ni3 hao3`) to accented pinyin (e.g. `nǐ hǎo`) during import.
 - `src/lib/db.js`

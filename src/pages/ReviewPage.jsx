@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import PlecoLookupButton from '../components/PlecoLookupButton'
 import { DECK_FILTER_UNASSIGNED, getDeck, getDueCards, getNewCards, logReview, updateCard } from '../lib/db'
+import { convertNumberedPinyin } from '../lib/pinyin'
 import { calculateNextReview, previewIntervals, formatInterval } from '../lib/srs'
 
 export default function ReviewPage({ onRefresh }) {
@@ -202,7 +203,7 @@ export default function ReviewPage({ onRefresh }) {
         {flipped && (
           <div className="slide-up" style={{ width: '100%' }}>
             <div style={{ fontSize: 24, color: 'var(--accent)', marginBottom: 4 }}>
-              {currentCard?.pinyin}
+              {convertNumberedPinyin(currentCard?.pinyin)}
             </div>
             <div style={{
               fontSize: 16,

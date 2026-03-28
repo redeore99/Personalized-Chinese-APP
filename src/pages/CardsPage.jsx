@@ -8,6 +8,7 @@ import {
   getDeckOptions,
   updateCard
 } from '../lib/db'
+import { convertNumberedPinyin } from '../lib/pinyin'
 
 const EMPTY_EDITOR = {
   character: '',
@@ -396,7 +397,7 @@ export default function CardsPage({ onRefresh }) {
                       <div className="char-display" style={{ fontSize: 28, minWidth: 48 }}>{card.character}</div>
                       <div className="library-row-copy">
                         <div className="library-row-title">
-                          <span>{card.pinyin || 'No pinyin yet'}</span>
+                          <span>{convertNumberedPinyin(card.pinyin) || 'No pinyin yet'}</span>
                           <span className={`badge badge-${card.status}`}>{card.statusLabel}</span>
                         </div>
                         <div className="text-secondary" style={{ fontSize: 14 }}>

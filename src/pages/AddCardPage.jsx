@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { addCard, getDeckOptions, getRecentCards } from '../lib/db'
+import { convertNumberedPinyin } from '../lib/pinyin'
 
 export default function AddCardPage({ onRefresh }) {
   const navigate = useNavigate()
@@ -248,7 +249,7 @@ export default function AddCardPage({ onRefresh }) {
                 <div className="library-row-main">
                   <span className="char-display" style={{ fontSize: 24 }}>{card.character}</span>
                   <div>
-                    <div style={{ fontWeight: 600 }}>{card.pinyin || 'No pinyin yet'}</div>
+                    <div style={{ fontWeight: 600 }}>{convertNumberedPinyin(card.pinyin) || 'No pinyin yet'}</div>
                     <div className="text-muted" style={{ fontSize: 13 }}>{card.meaning || 'No meaning yet'}</div>
                   </div>
                 </div>
