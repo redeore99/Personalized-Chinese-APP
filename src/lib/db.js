@@ -505,7 +505,25 @@ export async function getDueCards(deckFilter = null) {
       resolvedDeckId: activeDeckIds.has(card.deckId) ? card.deckId : null
     }))
     .filter(card => matchesDeckFilter(card, deckFilter))
-    .sort((left, right) => left.nextReview.localeCompare(right.nextReview))
+    .sort((left, right) => {
+      const leftReviewed = (left.repetitions || 0) > 0
+      const rightReviewed = (right.repetitions || 0) > 0
+
+      // Cards already in SRS rotation come first, sorted by due date (oldest due first)
+      if (leftReviewed && rightReviewed) {
+        return left.nextReview.localeCompare(right.nextReview)
+      }
+
+      // Reviewed cards before never-reviewed cards
+      if (leftReviewed !== rightReviewed) {
+        return leftReviewed ? -1 : 1
+      }
+
+      // Never-reviewed cards: most recently added first (LIFO)
+      return (right.updatedAt || right.createdAt || '').localeCompare(
+        left.updatedAt || left.createdAt || ''
+      )
+    })
 }
 
 export async function getNewCards(deckFilter = null, limit = 20) {
@@ -523,6 +541,11 @@ export async function getNewCards(deckFilter = null, limit = 20) {
       resolvedDeckId: activeDeckIds.has(card.deckId) ? card.deckId : null
     }))
     .filter(card => matchesDeckFilter(card, deckFilter))
+    .sort((left, right) =>
+      (right.updatedAt || right.createdAt || '').localeCompare(
+        left.updatedAt || left.createdAt || ''
+      )
+    )
     .slice(0, limit)
 }
 

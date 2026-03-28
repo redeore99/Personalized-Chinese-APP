@@ -51,7 +51,7 @@ The old local PIN lock system has been removed. Do not describe it as the curren
 - `src/lib/db.js`
   Dexie schema plus local CRUD helpers. It now stores richer deck metadata, supports card browsing/editing queries, refreshes linked Pleco decks without destructive overwrites or duplicate cards across repeated device exports, bulk-deletes cards through tombstones, bulk-deletes decks by tombstoning the deck while detaching cards to standalone, and exposes recent study activity helpers alongside the sync metadata fields such as `syncId`, `updatedAt`, `dirty`, and `deletedAt`.
 - `src/lib/sync.js`
-  Pulls remote rows into Dexie, pushes dirty local rows to Supabase, can report cloud counts, automatically runs a full-library reconcile when local and cloud counts still disagree, treats deletions as tombstones so stale undeleted rows do not resurrect records, allows an active cloud row to heal a stale synced local tombstone, detaches active cards from deleted deck links during pull so they do not become invisible orphan records, and falls back to the legacy deck shape until the latest Supabase deck columns have been applied.
+  Pulls remote rows into Dexie using paginated fetches (1000 rows per page, loops until all rows retrieved), pushes dirty local rows to Supabase in batches of 500, can report cloud counts, automatically runs a full-library reconcile when local and cloud counts still disagree, treats deletions as tombstones so stale undeleted rows do not resurrect records, allows an active cloud row to heal a stale synced local tombstone, detaches active cards from deleted deck links during pull so they do not become invisible orphan records, and falls back to the legacy deck shape until the latest Supabase deck columns have been applied.
 - `src/lib/backup.js`
   Encrypted export and restore for the local cache using a separate backup password.
 - `src/pages/HomePage.jsx`
@@ -144,6 +144,9 @@ Working now:
 - bulk deck deletion that preserves cards as standalone for safer cleanup
 - Pleco deep-link lookup from active review and writing sessions on mobile
 - manual Pleco `.txt` linked refresh that unions unique cards across repeated exports, fills missing pinyin or meaning when possible, reads Pleco's tab-separated export plus `// Section` markers correctly, keeps extra Pleco categories as tags instead of duplicating cards, and ignores suspicious category values that would otherwise create bogus empty decks
+- paginated cloud fetches so sync works correctly beyond Supabase's default 1000-row response limit
+- batched cloud pushes (500 rows per request) to avoid timeout on large upserts
+- review queue orders already-reviewed SRS cards by due date (oldest first) and never-reviewed cards by most recently added first (LIFO) so new imports surface quickly
 - manual `Sync Now` with automatic full reconcile when counts drift
 - cloud vs local counts visible in Settings for sync troubleshooting
 - one-device "replace from cloud" recovery for browsers whose local cache is stuck behind the canonical cloud data
@@ -156,6 +159,9 @@ Working now:
 - eager PWA update registration so installed mobile builds refresh more reliably
 
 Still missing or incomplete:
+- Pleco deep-link for sentences: currently opens only the first word; should use Pleco's search endpoint (`plecoapi://x-callback-url/s?q=...`) for multi-character strings like sentences
+- adaptive font sizing for sentence flashcards: cards in the sentences deck or with longer character strings should render smaller than single-word cards
+- Chinese Zero To Hero integration: potential for importing vocabulary or linking study content from chinesezerotohero.com
 - dictionary auto-fill
 - richer bulk card actions and deeper card editing for examples/history
 - richer stats and charts beyond the new dashboard activity view

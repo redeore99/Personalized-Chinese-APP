@@ -1,7 +1,8 @@
 import { db, getLocalDataCounts, normalizeDeckMetadata, setMetaValue } from './db'
 import { isSupabaseConfigured, supabase } from './supabase'
 
-const REMOTE_FETCH_LIMIT = 5000
+const PAGE_SIZE = 1000
+const PUSH_BATCH_SIZE = 500
 const LEGACY_TABLE_COLUMNS = {
   decks: ['id', 'owner_id', 'name', 'created_at', 'updated_at', 'deleted_at']
 }
@@ -139,17 +140,31 @@ function serializeWritingLog(entry, ownerId) {
 async function fetchRemoteTable(tableName) {
   requireSupabase()
 
-  const { data, error } = await supabase
-    .from(tableName)
-    .select('*')
-    .order('updated_at', { ascending: true })
-    .range(0, REMOTE_FETCH_LIMIT - 1)
+  const allRows = []
+  let offset = 0
 
-  if (error) {
-    throw new Error(error.message)
+  while (true) {
+    const { data, error } = await supabase
+      .from(tableName)
+      .select('*')
+      .order('updated_at', { ascending: true })
+      .range(offset, offset + PAGE_SIZE - 1)
+
+    if (error) {
+      throw new Error(error.message)
+    }
+
+    const rows = data || []
+    allRows.push(...rows)
+
+    if (rows.length < PAGE_SIZE) {
+      break
+    }
+
+    offset += PAGE_SIZE
   }
 
-  return data || []
+  return allRows
 }
 
 async function countRemoteTable(tableName) {
@@ -369,50 +384,59 @@ async function upsertRemoteRows(tableName, rows) {
   }
 
   requireSupabase()
-  const { error } = await supabase.from(tableName).upsert(rows, { onConflict: 'id' })
 
-  if (!error) {
-    return { usedLegacyFallback: false }
-  }
+  for (let i = 0; i < rows.length; i += PUSH_BATCH_SIZE) {
+    const batch = rows.slice(i, i + PUSH_BATCH_SIZE)
+    const { error } = await supabase.from(tableName).upsert(batch, { onConflict: 'id' })
 
-  if (
-    tableName === 'decks' &&
-    (
-      /column .* does not exist/i.test(error.message) ||
-      /schema cache/i.test(error.message) ||
-      /Could not find the .* column/i.test(error.message)
-    )
-  ) {
-    const fallbackRows = rows.map(row => {
-      const allowedColumns = LEGACY_TABLE_COLUMNS[tableName]
-      return Object.fromEntries(
-        Object.entries(row).filter(([key]) => allowedColumns.includes(key))
-      )
-    })
-
-    const { error: fallbackError } = await supabase
-      .from(tableName)
-      .upsert(fallbackRows, { onConflict: 'id' })
-
-    if (fallbackError) {
-      throw new Error(fallbackError.message)
+    if (!error) {
+      continue
     }
 
-    return { usedLegacyFallback: true }
+    if (
+      tableName === 'decks' &&
+      (
+        /column .* does not exist/i.test(error.message) ||
+        /schema cache/i.test(error.message) ||
+        /Could not find the .* column/i.test(error.message)
+      )
+    ) {
+      const fallbackBatch = batch.map(row => {
+        const allowedColumns = LEGACY_TABLE_COLUMNS[tableName]
+        return Object.fromEntries(
+          Object.entries(row).filter(([key]) => allowedColumns.includes(key))
+        )
+      })
+
+      const { error: fallbackError } = await supabase
+        .from(tableName)
+        .upsert(fallbackBatch, { onConflict: 'id' })
+
+      if (fallbackError) {
+        throw new Error(fallbackError.message)
+      }
+
+      return { usedLegacyFallback: true }
+    }
+
+    throw new Error(error.message)
   }
 
-  throw new Error(error.message)
+  return { usedLegacyFallback: false }
 }
 
 async function markRowsSynced(table, syncIds) {
   if (!syncIds.length) return
 
-  await table
-    .where('syncId')
-    .anyOf(syncIds)
-    .modify(row => {
-      row.dirty = false
-    })
+  for (let i = 0; i < syncIds.length; i += PUSH_BATCH_SIZE) {
+    const batch = syncIds.slice(i, i + PUSH_BATCH_SIZE)
+    await table
+      .where('syncId')
+      .anyOf(batch)
+      .modify(row => {
+        row.dirty = false
+      })
+  }
 }
 
 async function pushRowsToCloud(userId, { includeClean = false } = {}) {
