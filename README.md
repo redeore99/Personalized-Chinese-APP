@@ -1,14 +1,27 @@
 # Personalized Chinese App
 
-A single-owner Chinese study PWA with spaced repetition review, Hanzi writing practice, Supabase account auth, cloud sync, and a local Dexie cache for fast browser storage.
+A single-owner Chinese study PWA with spaced repetition review, Hanzi writing practice, Supabase account auth, cloud sync, and a local Dexie cache for fast browser storage. It now also works as a daily study coach: streaks, a composed daily session, push reminders, curated video content, an offline dictionary, and an article-mining reading mode.
 
 ## Current Stack
 - React 18 + Vite 6
 - React Router v6 with `HashRouter`
 - Dexie.js for local IndexedDB storage
 - Supabase Auth + Postgres + Row Level Security
+- Supabase Edge Function (`send-due-push`) + pg_cron for daily Web Push reminders
 - HanziWriter for writing practice
+- Web Speech API for card audio (TTS)
+- CC-CEDICT (downloaded on demand) for offline dictionary lookups
 - Vercel for deployment from GitHub
+
+## Habit & Content Layer (new)
+- Home shows "Today's Session": a capped review chunk, a writing step, and a daily video pick, plus a streak counter, daily goal progress, and a 7-day activity strip.
+- `/review?limit=N` runs a session-capped review that always reserves a few slots for never-reviewed cards, so new decks surface despite a big due backlog.
+- Daily Web Push reminders (Android/desktop; installed PWA) with a due-count app icon badge. Enable/disable and test from Settings.
+- Watch tab: curated channels and shortcuts (SyS Mandarin songs/stories/news, Chinese Zero to Hero, Grace Mandarin, ShuoshuoChinese) with topic filters and a deterministic daily pick.
+- Article Mode: paste Chinese text, segment it against CC-CEDICT plus your own cards, see known/new coverage, tap any word to look it up, hear it, open it in Pleco, or add it as a card.
+- Add Card auto-fills pinyin and meaning from the offline dictionary.
+- Prebuilt decks now include HSK 5, Economics · Core (190 econ/finance terms), and Radicals & Components (110 radicals with names and example characters).
+- Review cards speak via TTS, and long words or sentences auto-shrink to fit the card.
 
 ## Important Architecture Notes
 - The app no longer uses the old local PIN lock model.

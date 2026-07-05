@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { addCard, getDeckOptions, getRecentCards } from '../lib/db'
+import { autofillFor, getDictStatus } from '../lib/dict'
 import { convertNumberedPinyin } from '../lib/pinyin'
 
 export default function AddCardPage({ onRefresh }) {
@@ -18,6 +19,39 @@ export default function AddCardPage({ onRefresh }) {
   const [decks, setDecks] = useState([])
   const [saved, setSaved] = useState(false)
   const [recentCards, setRecentCards] = useState([])
+  const [dictReady, setDictReady] = useState(false)
+  const [autofilling, setAutofilling] = useState(false)
+  const [autofillNote, setAutofillNote] = useState(null)
+
+  useEffect(() => {
+    getDictStatus().then(status => setDictReady(status.loaded))
+  }, [])
+
+  const handleAutofill = async (silent = false) => {
+    const word = character.trim()
+    if (!word || !dictReady) return
+
+    setAutofilling(true)
+    const result = await autofillFor(word)
+    setAutofilling(false)
+
+    if (!result) {
+      if (!silent) setAutofillNote(`"${word}" is not in the offline dictionary — try Pleco.`)
+      return
+    }
+
+    let filled = false
+    if (!pinyin.trim() && result.pinyin) {
+      setPinyin(result.pinyin)
+      filled = true
+    }
+    if (!meaning.trim() && result.meaning) {
+      setMeaning(result.meaning)
+      filled = true
+    }
+
+    setAutofillNote(filled ? 'Filled from CC-CEDICT — double-check before saving.' : null)
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -144,11 +178,36 @@ export default function AddCardPage({ onRefresh }) {
           className="input"
           type="text"
           value={character}
-          onChange={event => setCharacter(event.target.value)}
+          onChange={event => {
+            setCharacter(event.target.value)
+            setAutofillNote(null)
+          }}
+          onBlur={() => {
+            if (dictReady && character.trim() && !pinyin.trim() && !meaning.trim()) {
+              handleAutofill(true)
+            }
+          }}
           placeholder="e.g. 繁荣"
           style={{ fontFamily: 'var(--font-chinese)', fontSize: 24, textAlign: 'center', padding: '16px' }}
           lang="zh"
         />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={() => handleAutofill(false)}
+            disabled={!dictReady || autofilling || !character.trim()}
+          >
+            {autofilling ? 'Looking up...' : 'Auto-fill from dictionary'}
+          </button>
+          {!dictReady && (
+            <span className="text-muted" style={{ fontSize: 12 }}>
+              Download the offline dictionary in Settings to enable auto-fill.
+            </span>
+          )}
+          {autofillNote && (
+            <span className="text-secondary" style={{ fontSize: 12 }}>{autofillNote}</span>
+          )}
+        </div>
       </div>
 
       <div className="form-grid">

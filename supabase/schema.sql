@@ -244,3 +244,104 @@ drop policy if exists "writing_logs_update_allowed" on public.writing_logs;
 create policy "writing_logs_update_allowed" on public.writing_logs
 for update using (public.is_allowed_user() and auth.uid() = owner_id)
 with check (public.is_allowed_user() and auth.uid() = owner_id);
+
+-- ---------------------------------------------------------------------------
+-- Daily reminder push notifications (Web Push / VAPID)
+-- ---------------------------------------------------------------------------
+
+-- Server-only push configuration. RLS is enabled with NO policies and all
+-- client grants are revoked, so only the service role (edge functions) and
+-- postgres (pg_cron) can read it. Never expose vapid_private to clients.
+create table if not exists public.push_private (
+  singleton boolean primary key default true check (singleton),
+  vapid_public text not null,
+  vapid_private text not null,
+  cron_secret text not null,
+  updated_at timestamptz not null default now()
+);
+
+alter table public.push_private enable row level security;
+revoke all on table public.push_private from anon;
+revoke all on table public.push_private from authenticated;
+
+-- Seed it once (run in the SQL editor, do NOT commit real values):
+-- insert into public.push_private (singleton, vapid_public, vapid_private, cron_secret)
+-- values (true, '<VAPID_PUBLIC_KEY>', '<VAPID_PRIVATE_KEY>', '<RANDOM_CRON_SECRET>')
+-- on conflict (singleton) do update
+-- set vapid_public = excluded.vapid_public,
+--     vapid_private = excluded.vapid_private,
+--     cron_secret = excluded.cron_secret,
+--     updated_at = now();
+-- Generate keys with: npx web-push generate-vapid-keys
+
+-- Device push subscriptions (one row per browser/device).
+create table if not exists public.push_subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null references auth.users(id) on delete cascade,
+  endpoint text not null unique,
+  p256dh text not null,
+  auth text not null,
+  user_agent text not null default '',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.push_subscriptions enable row level security;
+
+drop policy if exists "push_subscriptions_select_allowed" on public.push_subscriptions;
+create policy "push_subscriptions_select_allowed" on public.push_subscriptions
+for select using (public.is_allowed_user() and auth.uid() = owner_id);
+
+drop policy if exists "push_subscriptions_insert_allowed" on public.push_subscriptions;
+create policy "push_subscriptions_insert_allowed" on public.push_subscriptions
+for insert with check (public.is_allowed_user() and auth.uid() = owner_id);
+
+drop policy if exists "push_subscriptions_update_allowed" on public.push_subscriptions;
+create policy "push_subscriptions_update_allowed" on public.push_subscriptions
+for update using (public.is_allowed_user() and auth.uid() = owner_id)
+with check (public.is_allowed_user() and auth.uid() = owner_id);
+
+drop policy if exists "push_subscriptions_delete_allowed" on public.push_subscriptions;
+create policy "push_subscriptions_delete_allowed" on public.push_subscriptions
+for delete using (public.is_allowed_user() and auth.uid() = owner_id);
+
+-- The VAPID public key is not secret; expose it to the allowed user so the
+-- frontend needs no extra env var.
+create or replace function public.get_vapid_public_key()
+returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select case when public.is_allowed_user()
+    then (select vapid_public from public.push_private limit 1)
+    else null
+  end;
+$$;
+
+revoke all on function public.get_vapid_public_key() from public;
+grant execute on function public.get_vapid_public_key() to authenticated;
+
+-- Daily schedule: pg_cron calls the send-due-push edge function each morning.
+-- 05:30 UTC ≈ 07:30 Rome in summer / 06:30 in winter. Adjust to taste, then
+-- rerun this block (replace <PROJECT-REF> with your Supabase project ref).
+create extension if not exists pg_cron;
+create extension if not exists pg_net;
+
+-- select cron.unschedule('daily-due-push');  -- run first when rescheduling
+-- select cron.schedule(
+--   'daily-due-push',
+--   '30 5 * * *',
+--   $cron$
+--   select net.http_post(
+--     url := 'https://<PROJECT-REF>.supabase.co/functions/v1/send-due-push',
+--     headers := jsonb_build_object(
+--       'Content-Type', 'application/json',
+--       'x-cron-secret', (select cron_secret from public.push_private limit 1)
+--     ),
+--     body := jsonb_build_object('source', 'cron'),
+--     timeout_milliseconds := 10000
+--   );
+--   $cron$
+-- );

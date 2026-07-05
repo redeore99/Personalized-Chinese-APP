@@ -5,6 +5,16 @@ import { useAuth } from '../contexts/AuthContext'
 import { useSync } from '../contexts/SyncContext'
 import { getCloudDataCounts } from '../lib/sync'
 import { parsePlecoImportFile } from '../lib/plecoImport'
+import {
+  getExistingSubscription,
+  getNotificationPermission,
+  isPushSupported,
+  sendTestPush,
+  subscribeToPush,
+  unsubscribeFromPush
+} from '../lib/push'
+import { clearDictionary, downloadDictionary, getDictStatus } from '../lib/dict'
+import { getDailyGoal, setDailyGoal } from '../lib/habits'
 
 function formatTimestamp(value) {
   if (!value) return 'Not yet'
@@ -91,6 +101,116 @@ export default function SettingsPage({ onRefresh }) {
 
   const fileInputRef = useRef(null)
   const plecoFileInputRef = useRef(null)
+
+  // Daily reminders (Web Push)
+  const pushSupported = isPushSupported()
+  const [pushSubscribed, setPushSubscribed] = useState(false)
+  const [pushBusy, setPushBusy] = useState(false)
+  const [testingPush, setTestingPush] = useState(false)
+
+  // Offline dictionary
+  const [dictStatus, setDictStatus] = useState({ loaded: false, entryCount: 0 })
+  const [dictBusy, setDictBusy] = useState(false)
+  const [dictProgress, setDictProgress] = useState('')
+
+  // Daily goal
+  const [dailyGoal, setDailyGoalState] = useState(20)
+
+  useEffect(() => {
+    if (pushSupported) {
+      getExistingSubscription()
+        .then(subscription => setPushSubscribed(Boolean(subscription)))
+        .catch(() => {})
+    }
+    getDictStatus().then(setDictStatus)
+    getDailyGoal().then(setDailyGoalState)
+  }, [pushSupported])
+
+  const handleEnablePush = async () => {
+    setPushBusy(true)
+    setStatus(null)
+
+    try {
+      await subscribeToPush()
+      setPushSubscribed(true)
+      setStatus({
+        type: 'success',
+        message: 'Daily reminders enabled on this device. You will get a push each morning when cards are due.'
+      })
+    } catch (err) {
+      setStatus({ type: 'error', message: err.message })
+    }
+
+    setPushBusy(false)
+  }
+
+  const handleDisablePush = async () => {
+    setPushBusy(true)
+    setStatus(null)
+
+    try {
+      await unsubscribeFromPush()
+      setPushSubscribed(false)
+      setStatus({ type: 'success', message: 'Reminders disabled on this device.' })
+    } catch (err) {
+      setStatus({ type: 'error', message: err.message })
+    }
+
+    setPushBusy(false)
+  }
+
+  const handleTestPush = async () => {
+    setTestingPush(true)
+    setStatus(null)
+
+    try {
+      const result = await sendTestPush()
+      setStatus({
+        type: 'success',
+        message: `Test push sent to ${result?.sent ?? '?'} device(s). If nothing arrived within a minute, re-enable reminders and try again.`
+      })
+    } catch (err) {
+      setStatus({ type: 'error', message: err.message })
+    }
+
+    setTestingPush(false)
+  }
+
+  const handleDownloadDict = async () => {
+    setDictBusy(true)
+    setStatus(null)
+
+    try {
+      const result = await downloadDictionary(setDictProgress)
+      setDictStatus(await getDictStatus())
+      setStatus({
+        type: 'success',
+        message: `Offline dictionary ready: ${result.entryCount.toLocaleString()} CC-CEDICT entries. Auto-fill and Article Mode are now available.`
+      })
+    } catch (err) {
+      setStatus({ type: 'error', message: err.message })
+    }
+
+    setDictBusy(false)
+    setDictProgress('')
+  }
+
+  const handleClearDict = async () => {
+    setDictBusy(true)
+    await clearDictionary()
+    setDictStatus(await getDictStatus())
+    setDictBusy(false)
+    setStatus({ type: 'success', message: 'Offline dictionary removed from this device.' })
+  }
+
+  const handleGoalChange = async value => {
+    const parsed = Number(value)
+    setDailyGoalState(value)
+
+    if (Number.isFinite(parsed) && parsed >= 1) {
+      await setDailyGoal(parsed)
+    }
+  }
 
   const refreshLocalCounts = async () => {
     const counts = await getLocalDataCounts()
@@ -309,6 +429,78 @@ export default function SettingsPage({ onRefresh }) {
         >
           {signingOut ? 'Signing out...' : 'Sign Out'}
         </button>
+      </div>
+
+      <div className="card" style={{ marginBottom: 12 }}>
+        <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Daily Reminders</h3>
+        {!pushSupported ? (
+          <p className="text-secondary" style={{ fontSize: 13, lineHeight: 1.5 }}>
+            This browser does not support push notifications. On Android, open the app in Chrome and
+            install it to your home screen first.
+          </p>
+        ) : (
+          <>
+            <p className="text-secondary" style={{ fontSize: 13, marginBottom: 12, lineHeight: 1.5 }}>
+              Get a push notification each morning with how many cards are due
+              {pushSubscribed
+                ? '. Reminders are ON for this device.'
+                : '. Currently OFF on this device.'}
+              {getNotificationPermission() === 'denied' &&
+                ' Notifications are blocked in your browser settings — allow them for this site first.'}
+            </p>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {pushSubscribed ? (
+                <>
+                  <button className="btn btn-secondary btn-sm" onClick={handleDisablePush} disabled={pushBusy}>
+                    {pushBusy ? 'Working...' : 'Disable Reminders'}
+                  </button>
+                  <button className="btn btn-ghost btn-sm" onClick={handleTestPush} disabled={testingPush}>
+                    {testingPush ? 'Sending...' : 'Send Test Push'}
+                  </button>
+                </>
+              ) : (
+                <button className="btn btn-primary btn-sm" onClick={handleEnablePush} disabled={pushBusy}>
+                  {pushBusy ? 'Enabling...' : 'Enable Daily Reminders'}
+                </button>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+
+      <div className="card" style={{ marginBottom: 12 }}>
+        <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Daily Goal</h3>
+        <p className="text-secondary" style={{ fontSize: 13, marginBottom: 12, lineHeight: 1.5 }}>
+          Reviews per day for the streak and Today&apos;s Session. Keep it small enough that you never skip.
+        </p>
+        <input
+          className="input"
+          type="number"
+          min="1"
+          max="200"
+          value={dailyGoal}
+          onChange={event => handleGoalChange(event.target.value)}
+          style={{ maxWidth: 120 }}
+        />
+      </div>
+
+      <div className="card" style={{ marginBottom: 12 }}>
+        <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Offline Dictionary</h3>
+        <p className="text-secondary" style={{ fontSize: 13, marginBottom: 12, lineHeight: 1.5 }}>
+          {dictStatus.loaded
+            ? `CC-CEDICT is installed on this device (${dictStatus.entryCount.toLocaleString()} entries). Powers Add Card auto-fill and Article Mode.`
+            : 'Download the free CC-CEDICT dictionary (~8 MB, one time) to enable Add Card auto-fill and Article Mode.'}
+        </p>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button className="btn btn-primary btn-sm" onClick={handleDownloadDict} disabled={dictBusy}>
+            {dictBusy ? (dictProgress || 'Working...') : dictStatus.loaded ? 'Re-download / Update' : 'Download Dictionary'}
+          </button>
+          {dictStatus.loaded && (
+            <button className="btn btn-ghost btn-sm" onClick={handleClearDict} disabled={dictBusy}>
+              Remove
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="card" style={{ marginBottom: 12 }}>

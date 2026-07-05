@@ -432,6 +432,17 @@ db.version(5).stores({
   }
 })
 
+// v6 adds the offline CC-CEDICT dictionary cache (device-local, never synced).
+db.version(6).stores({
+  cards: '++id, syncId, deckId, deckSyncId, character, pinyin, nextReview, lastReview, createdAt, updatedAt, deletedAt, dirty, suspended, *tags',
+  decks: '++id, syncId, slug, name, kind, sourceKey, sortOrder, updatedAt, deletedAt, dirty',
+  reviewLog: '++id, syncId, cardId, cardSyncId, reviewedAt, updatedAt, dirty',
+  writingLog: '++id, syncId, cardId, cardSyncId, practicedAt, updatedAt, dirty',
+  security: 'key',
+  meta: 'key',
+  dict: '++id, simp'
+})
+
 export async function setMetaValue(key, value) {
   await db.meta.put({ key, value, updatedAt: nowIso() })
 }

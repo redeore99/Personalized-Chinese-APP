@@ -7,8 +7,11 @@ import AddCardPage from './pages/AddCardPage'
 import CardsPage from './pages/CardsPage'
 import DecksPage from './pages/DecksPage'
 import SettingsPage from './pages/SettingsPage'
+import WatchPage from './pages/WatchPage'
+import ArticlePage from './pages/ArticlePage'
 import AuthGate from './components/AuthGate'
 import { getStats } from './lib/db'
+import { updateAppBadge } from './lib/push'
 
 // SVG Icons as components
 const HomeIcon = () => (
@@ -61,6 +64,11 @@ function App() {
     return () => clearInterval(interval)
   }, [refreshStats])
 
+  // Keep the app icon badge in sync with the due count (installed PWAs)
+  useEffect(() => {
+    updateAppBadge(stats.dueCount || 0)
+  }, [stats.dueCount])
+
   return (
     <AuthGate>
       <HashRouter>
@@ -71,6 +79,8 @@ function App() {
           <Route path="/add" element={<AddCardPage onRefresh={refreshStats} />} />
           <Route path="/cards" element={<CardsPage onRefresh={refreshStats} />} />
           <Route path="/decks" element={<DecksPage onRefresh={refreshStats} />} />
+          <Route path="/watch" element={<WatchPage />} />
+          <Route path="/article" element={<ArticlePage onRefresh={refreshStats} />} />
           <Route path="/settings" element={<SettingsPage onRefresh={refreshStats} />} />
         </Routes>
 

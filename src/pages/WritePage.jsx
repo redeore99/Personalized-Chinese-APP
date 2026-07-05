@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import HanziWriter from 'hanzi-writer'
 import PlecoLookupButton from '../components/PlecoLookupButton'
+import SpeakButton from '../components/SpeakButton'
 import { DECK_FILTER_UNASSIGNED, getAllCards, getDeck, getDueCards, logWriting, updateCard } from '../lib/db'
 import { convertNumberedPinyin } from '../lib/pinyin'
 import { calculateNextReview } from '../lib/srs'
@@ -372,7 +373,10 @@ export default function WritePage({ onRefresh }) {
       {/* Prompt */}
       <div className="write-prompt">
         <div className="write-prompt-label">Write this word</div>
-        <div className="write-prompt-pinyin">{convertNumberedPinyin(currentCard.pinyin)}</div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+          <div className="write-prompt-pinyin">{convertNumberedPinyin(currentCard.pinyin)}</div>
+          <SpeakButton text={currentCard.character} />
+        </div>
         <div className="write-prompt-meaning">{currentCard.meaning}</div>
         <PlecoLookupButton character={currentCard.character} />
       </div>

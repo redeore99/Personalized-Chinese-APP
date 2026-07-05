@@ -10,7 +10,7 @@ import {
   getStandaloneCardSummary,
   repairDeckCards
 } from '../lib/db'
-import { PREBUILT_DECKS } from '../lib/deckCatalog'
+import { CZH_LINKS, PREBUILT_DECKS } from '../lib/deckCatalog'
 
 export default function DecksPage({ onRefresh }) {
   const navigate = useNavigate()
@@ -342,6 +342,16 @@ export default function DecksPage({ onRefresh }) {
                   <span className="badge badge-prebuilt">Prebuilt</span>
                 </div>
                 <div className="text-secondary" style={{ fontSize: 14 }}>{prebuilt.description}</div>
+                {prebuilt.courseUrl && (
+                  <a
+                    href={prebuilt.courseUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ fontSize: 13, color: '#38bdf8', textDecoration: 'none', display: 'inline-block', marginTop: 6 }}
+                  >
+                    {prebuilt.courseName || 'Matching course'} ↗
+                  </a>
+                )}
                 {needsRepair && (
                   <div style={{ fontSize: 12, color: 'var(--warning)', marginTop: 6 }}>
                     {matchingDeck.cardCount} of {prebuilt.words.length} cards on this device. {missingCount} missing.
@@ -371,6 +381,29 @@ export default function DecksPage({ onRefresh }) {
             </div>
           )
         })}
+      </section>
+
+      <section className="card" style={{ marginTop: 20 }}>
+        <div className="section-heading-row">
+          <h3 className="section-heading">Chinese Zero to Hero</h3>
+          <span className="text-muted" style={{ fontSize: 13 }}>
+            Courses teach, this app drills.
+          </span>
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {CZH_LINKS.map(link => (
+            <a
+              key={link.url}
+              className="btn btn-secondary btn-sm"
+              href={link.url}
+              target="_blank"
+              rel="noreferrer"
+              style={{ textDecoration: 'none' }}
+            >
+              {link.label} ↗
+            </a>
+          ))}
+        </div>
       </section>
 
       {loading && (

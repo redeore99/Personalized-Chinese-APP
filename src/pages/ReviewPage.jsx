@@ -1,9 +1,21 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import PlecoLookupButton from '../components/PlecoLookupButton'
+import SpeakButton from '../components/SpeakButton'
 import { DECK_FILTER_UNASSIGNED, getDeck, getDueCards, getNewCards, logReview, updateCard } from '../lib/db'
+import { SESSION_NEW_CARD_COUNT } from '../lib/habits'
 import { convertNumberedPinyin } from '../lib/pinyin'
 import { calculateNextReview, previewIntervals, formatInterval } from '../lib/srs'
+
+// Adaptive font size so long words and full sentences fit the card.
+function characterFontSize(text) {
+  const length = Array.from(text || '').length
+  if (length <= 2) return 88
+  if (length <= 4) return 60
+  if (length <= 6) return 44
+  if (length <= 10) return 34
+  return 26
+}
 
 export default function ReviewPage({ onRefresh }) {
   const navigate = useNavigate()
@@ -26,6 +38,9 @@ export default function ReviewPage({ onRefresh }) {
       ? parsedDeckId
       : null
 
+  const limitParam = Number(searchParams.get('limit'))
+  const sessionLimit = Number.isFinite(limitParam) && limitParam > 0 ? Math.round(limitParam) : null
+
   // Load review queue
   useEffect(() => {
     async function loadQueue() {
@@ -44,11 +59,22 @@ export default function ReviewPage({ onRefresh }) {
       }
 
       // Combine: due cards first, then some new cards
-      const combined = [...due]
+      let combined = [...due]
       for (const nc of newCards) {
         if (!combined.find(c => c.id === nc.id)) {
           combined.push(nc)
         }
+      }
+
+      // Session mode: cap the queue but always reserve a few slots for
+      // never-reviewed cards so fresh decks surface despite a due backlog.
+      if (sessionLimit && combined.length > sessionLimit) {
+        const freshCards = newCards.slice(0, Math.min(SESSION_NEW_CARD_COUNT, Math.floor(sessionLimit / 4)))
+        const freshIds = new Set(freshCards.map(card => card.id))
+        const dueTake = due
+          .filter(card => !freshIds.has(card.id))
+          .slice(0, Math.max(sessionLimit - freshCards.length, 0))
+        combined = [...dueTake, ...freshCards]
       }
 
       setQueue(combined)
@@ -59,7 +85,7 @@ export default function ReviewPage({ onRefresh }) {
       }
     }
     loadQueue()
-  }, [deckFilter])
+  }, [deckFilter, sessionLimit])
 
   const currentCard = queue[currentIndex]
 
@@ -134,6 +160,11 @@ export default function ReviewPage({ onRefresh }) {
               <> — {Math.round(sessionStats.correct / sessionStats.reviewed * 100)}% correct</>
             )}
           </p>
+          {sessionStats.reviewed > 0 && (
+            <p style={{ fontSize: 14, color: 'var(--success)', fontWeight: 600 }}>
+              🔥 Today counts — your streak is safe.
+            </p>
+          )}
           <div className="flex gap-2 mt-2">
             <button className="btn btn-primary" onClick={() => navigate('/')}>Home</button>
             <button className="btn btn-secondary" onClick={() => navigate('/write')}>Practice Writing</button>
@@ -192,8 +223,18 @@ export default function ReviewPage({ onRefresh }) {
           gap: 16
         }}
       >
-        {/* Front: character */}
-        <div className="char-display char-xl">{currentCard?.character}</div>
+        {/* Front: character (font adapts to word/sentence length) */}
+        <div
+          className="char-display"
+          style={{
+            fontSize: characterFontSize(currentCard?.character),
+            lineHeight: 1.25,
+            wordBreak: 'break-word',
+            maxWidth: '100%'
+          }}
+        >
+          {currentCard?.character}
+        </div>
 
         {!flipped && (
           <p className="text-muted" style={{ fontSize: 14 }}>Tap to reveal</p>
@@ -202,8 +243,11 @@ export default function ReviewPage({ onRefresh }) {
         {/* Back: pinyin + meaning + examples */}
         {flipped && (
           <div className="slide-up" style={{ width: '100%' }}>
-            <div style={{ fontSize: 24, color: 'var(--accent)', marginBottom: 4 }}>
-              {convertNumberedPinyin(currentCard?.pinyin)}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 4 }}>
+              <div style={{ fontSize: 24, color: 'var(--accent)' }}>
+                {convertNumberedPinyin(currentCard?.pinyin)}
+              </div>
+              <SpeakButton text={currentCard?.character} />
             </div>
             <div style={{
               fontSize: 16,

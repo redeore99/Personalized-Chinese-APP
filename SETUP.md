@@ -75,6 +75,28 @@ VITE_TURNSTILE_SITE_KEY=1x00000000000000000000AA
   Deleting a deck does not delete the cards inside it. Those cards stay in your library as standalone cards so study data is not lost.
   `Select Empty` is the fastest cleanup path if a bad Pleco import created empty decks.
 
+## Daily Reminder Push Notifications (optional)
+The app can send a Web Push notification each morning with how many cards are due. This works on Android Chrome and desktop browsers; install the PWA to the home screen first for the best experience (and for the app-icon badge).
+
+One-time server setup:
+1. Generate a VAPID key pair on any machine: `npx web-push generate-vapid-keys`, and create a random cron secret (any long random string).
+2. Run the push section of `supabase/schema.sql` in Supabase SQL Editor (tables `push_private`, `push_subscriptions`, function `get_vapid_public_key`, extensions `pg_cron` + `pg_net`).
+3. Insert your keys into `public.push_private` using the commented seed statement in the SQL file. Never commit these values.
+4. Deploy the edge function in `supabase/functions/send-due-push/` (Dashboard → Edge Functions, or `supabase functions deploy send-due-push --no-verify-jwt`). Auth is enforced inside the function.
+5. Schedule the daily job by running the commented `cron.schedule` block in the SQL file with your project ref. The default is 05:30 UTC; adjust the cron expression to taste.
+
+Per-device setup:
+- Open the app → Settings → Daily Reminders → `Enable Daily Reminders`, accept the notification permission, then press `Send Test Push` to verify end to end.
+
+No new Vercel env vars are needed: the frontend fetches the public VAPID key from the database via RPC.
+
+## Offline Dictionary (optional)
+Settings → Offline Dictionary → `Download Dictionary` fetches CC-CEDICT (~8 MB, one time, stored in the device's IndexedDB). This enables:
+- Add Card auto-fill for pinyin and meaning
+- Article Mode (paste Chinese text, see which words you know, add the rest as cards)
+
+The dictionary is device-local and is not synced or included in encrypted backups.
+
 ## Optional Local Development
 Local development is not required just to use the deployed app, but it is useful when making or testing code changes.
 
