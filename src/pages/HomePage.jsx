@@ -195,6 +195,9 @@ export default function HomePage({ stats, onRefresh }) {
         <button className="btn btn-secondary btn-block" onClick={() => navigate('/add')} style={{ padding: '16px 20px' }}>
           Add New Card
         </button>
+        <button className="btn btn-secondary btn-block" onClick={() => navigate('/read')} style={{ padding: '16px 20px' }}>
+          Read a Book
+        </button>
         <button className="btn btn-secondary btn-block" onClick={() => navigate('/article')} style={{ padding: '16px 20px' }}>
           Article Mode
         </button>

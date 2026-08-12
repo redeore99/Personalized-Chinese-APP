@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "update-dictionary": "node scripts/update-dictionary.mjs",
+    "prepare-book": "node scripts/prepare-book.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.100.0",

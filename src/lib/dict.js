@@ -2,15 +2,42 @@ import { db, getMetaValue, setMetaValue } from './db'
 import { convertNumberedPinyin } from './pinyin'
 
 // Offline CC-CEDICT dictionary.
-// Downloaded once on demand (~8 MB text, cached in IndexedDB), then used for:
+// Downloaded once on demand (~3.8 MB gzipped, cached in IndexedDB), then used for:
 // - Add Card auto-fill (pinyin + meaning)
-// - Article mode segmentation and word lookups
+// - Article mode and book reader segmentation and word lookups
 // CC-CEDICT is CC BY-SA licensed (https://cc-cedict.org).
-export const DICT_SOURCE_URL = 'https://cdn.jsdelivr.net/gh/jtoy/crdict@master/cedict_ts.u8'
+//
+// The file is served from our own origin (see scripts/update-dictionary.mjs)
+// because mdbg.net sends no CORS header, and because the third-party mirror
+// this used to point at silently carried only ~36% of CC-CEDICT.
+export const DICT_SOURCE_URL = '/dict/cedict_ts.u8.gz'
+
+// A complete CC-CEDICT has ~125k entries. Anything far below that means the
+// device is holding a stale or truncated copy and should re-download.
+export const DICT_MIN_ENTRIES = 100000
 
 const MAX_WORD_LENGTH = 8
 
 let dictMapPromise = null
+
+// Vercel may or may not decompress the .gz for us depending on how it
+// negotiates the response, so the gzip magic number decides.
+async function readDictionaryText(response) {
+  const buffer = await response.arrayBuffer()
+  const bytes = new Uint8Array(buffer)
+  const isGzip = bytes[0] === 0x1f && bytes[1] === 0x8b
+
+  if (!isGzip) {
+    return new TextDecoder('utf-8').decode(buffer)
+  }
+
+  if (typeof DecompressionStream !== 'function') {
+    throw new Error('This browser cannot decompress the dictionary. Please update your browser.')
+  }
+
+  const stream = new Blob([buffer]).stream().pipeThrough(new DecompressionStream('gzip'))
+  return new Response(stream).text()
+}
 
 function normalizePinyin(rawPinyin) {
   // CC-CEDICT writes ü as "u:" — our converter understands "v"
@@ -50,19 +77,22 @@ export async function getDictStatus() {
   return {
     loaded: count > 0,
     entryCount: count,
-    loadedAt
+    loadedAt,
+    // Devices that loaded the old truncated mirror need a refresh.
+    outdated: count > 0 && count < DICT_MIN_ENTRIES
   }
 }
 
 export async function downloadDictionary(onProgress = () => {}) {
-  onProgress('Downloading CC-CEDICT (~8 MB)...')
+  onProgress('Downloading CC-CEDICT (~3.8 MB)...')
 
   const response = await fetch(DICT_SOURCE_URL)
   if (!response.ok) {
     throw new Error(`Dictionary download failed (HTTP ${response.status}). Check your connection and try again.`)
   }
 
-  const text = await response.text()
+  onProgress('Decompressing dictionary...')
+  const text = await readDictionaryText(response)
 
   onProgress('Parsing dictionary entries...')
   const lines = text.split('\n')
@@ -72,8 +102,11 @@ export async function downloadDictionary(onProgress = () => {}) {
     if (entry) entries.push(entry)
   }
 
-  if (entries.length < 1000) {
-    throw new Error('The downloaded dictionary looks incomplete. Please try again later.')
+  if (entries.length < DICT_MIN_ENTRIES) {
+    throw new Error(
+      `The downloaded dictionary looks incomplete (${entries.length.toLocaleString()} entries, ` +
+      `expected at least ${DICT_MIN_ENTRIES.toLocaleString()}). Please try again later.`
+    )
   }
 
   onProgress(`Saving ${entries.length.toLocaleString()} entries...`)

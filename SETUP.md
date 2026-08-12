@@ -90,12 +90,38 @@ Per-device setup:
 
 No new Vercel env vars are needed: the frontend fetches the public VAPID key from the database via RPC.
 
-## Offline Dictionary (optional)
-Settings → Offline Dictionary → `Download Dictionary` fetches CC-CEDICT (~8 MB, one time, stored in the device's IndexedDB). This enables:
+## Offline Dictionary (required for reading features)
+Settings → Offline Dictionary → `Download Dictionary` fetches CC-CEDICT (~3.8 MB gzipped, ~125,000 entries, one time, stored in the device's IndexedDB). This enables:
 - Add Card auto-fill for pinyin and meaning
 - Article Mode (paste Chinese text, see which words you know, add the rest as cards)
+- Read a Book
 
 The dictionary is device-local and is not synced or included in encrypted backups.
+
+**If you used this app before the dictionary was bundled, re-download it on every device.**
+Earlier builds pulled the dictionary from a third-party mirror that carried only 43,848 of about
+125,000 CC-CEDICT entries, so common words were silently missing. Settings shows a warning when a
+device is still holding that old copy. The file now ships with the app itself, so this cannot drift
+again.
+
+## Read a Book
+Home → `Read a Book`, or `/read`.
+
+The reader ships with 西游记 (Journey to the West), prepared from Project Gutenberg #23962 and
+converted from traditional to simplified. It needs the offline dictionary above.
+
+- Chapters download as you open them, and stay on the device afterwards.
+- `Save all chapters offline` downloads all 100 at once (about 4.5 MB) for reading without a
+  connection.
+- Tap any word for pinyin, definitions, the sentence it appeared in, audio, Pleco, and one-tap card
+  creation into any deck.
+- `pīn` toggles pinyin above each word, `简/繁` switches between simplified and traditional, and
+  `A−`/`A+` change text size. These settings are per device.
+- Your reading position and the chapters you have marked read sync across devices, provided the
+  latest SQL has been applied (see below).
+
+Adding another book requires a code change: prepare it with `npm run prepare-book` and register it
+in `src/lib/books.js`. Use only public-domain texts.
 
 ## Optional Local Development
 Local development is not required just to use the deployed app, but it is useful when making or testing code changes.
@@ -174,6 +200,12 @@ These external systems matter after code changes:
 - Delete says it worked, but the card is still visible on the same device
   Update to the latest build and try again from `Cards`.
   The current app now verifies that the local Dexie delete tombstone was actually written before reporting success.
+- Reading position does not follow you between devices
+  Rerun the latest `supabase/schema.local.sql` or `supabase/schema.sql` in Supabase SQL Editor to create the `reading_progress` table, then press `Sync Now` on both devices.
+  Everything else syncs normally without that table, so this only affects the book reader.
+- The word popup says a common word is not in the dictionary
+  Settings -> Offline Dictionary -> `Re-download / Update`.
+  Devices that installed the dictionary before it was bundled hold a truncated copy with about a third of the entries. Settings shows a warning when that is the case.
 - Deck organization looks different across devices
   Rerun the latest `supabase/schema.local.sql` or `supabase/schema.sql` in Supabase SQL Editor.
   The current app can still sync with the legacy deck shape, but the richer deck metadata only syncs completely after those columns exist in Supabase.

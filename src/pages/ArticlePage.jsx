@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import PlecoLookupButton from '../components/PlecoLookupButton'
-import SpeakButton from '../components/SpeakButton'
+import WordPopup from '../components/WordPopup'
 import { addCard, getAllCards, getDeckOptions } from '../lib/db'
 import { buildDictMap, downloadDictionary, getDictStatus, lookupWord, segmentText } from '../lib/dict'
 import { convertNumberedPinyin } from '../lib/pinyin'
@@ -191,54 +190,16 @@ export default function ArticlePage({ onRefresh }) {
       )}
 
       {selected && (
-        <div className="article-panel slide-up">
-          <div className="article-panel-head">
-            <span className="char-display" style={{ fontSize: 28 }}>{selected.text}</span>
-            <SpeakButton text={selected.text} />
-            <PlecoLookupButton character={selected.text} />
-            <button className="btn btn-ghost btn-sm" style={{ marginLeft: 'auto' }} onClick={() => setSelected(null)}>
-              Close
-            </button>
-          </div>
-
-          {selected.entries.length === 0 ? (
-            <p className="text-secondary" style={{ fontSize: 13 }}>
-              Not in the offline dictionary — try Pleco for this one.
-            </p>
-          ) : (
-            <div className="article-panel-defs">
-              {selected.entries.slice(0, 3).map((entry, index) => (
-                <div key={index} className="article-panel-def">
-                  <span style={{ color: 'var(--accent)', fontWeight: 600 }}>
-                    {convertNumberedPinyin(entry.pinyin)}
-                  </span>
-                  <span className="text-secondary"> — {entry.defs}</span>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div className="article-panel-actions">
-            <select
-              className="input"
-              value={targetDeckId}
-              onChange={event => setTargetDeckId(event.target.value)}
-              style={{ flex: 1, minWidth: 0 }}
-            >
-              <option value="">Standalone card</option>
-              {decks.map(deck => (
-                <option key={deck.id} value={deck.id}>{deck.name}</option>
-              ))}
-            </select>
-            <button
-              className="btn btn-primary btn-sm"
-              onClick={handleAddCard}
-              disabled={addedWords.has(selected.text) || knownWords.has(selected.text)}
-            >
-              {addedWords.has(selected.text) || knownWords.has(selected.text) ? 'In library ✓' : '+ Add card'}
-            </button>
-          </div>
-        </div>
+        <WordPopup
+          word={selected.text}
+          entries={selected.entries}
+          decks={decks}
+          targetDeckId={targetDeckId}
+          onDeckChange={setTargetDeckId}
+          onAdd={handleAddCard}
+          onClose={() => setSelected(null)}
+          inLibrary={addedWords.has(selected.text) || knownWords.has(selected.text)}
+        />
       )}
     </div>
   )

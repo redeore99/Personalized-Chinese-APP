@@ -178,11 +178,34 @@ create table if not exists public.writing_logs (
     on delete cascade
 );
 
+-- Reading position for the in-app book reader. One row per book. The chapter
+-- text itself is never stored here: it is public-domain content served from
+-- /books and cached on each device.
+create table if not exists public.reading_progress (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null references auth.users(id) on delete cascade,
+  book_slug text not null,
+  chapter integer not null default 1,
+  paragraph integer not null default 0,
+  finished_chapters integer[] not null default '{}',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz,
+  constraint reading_progress_owner_book_unique unique (owner_id, book_slug)
+);
+
+drop trigger if exists reading_progress_protect_sync_row on public.reading_progress;
+create trigger reading_progress_protect_sync_row
+before update on public.reading_progress
+for each row
+execute function public.protect_sync_row();
+
 alter table public.app_config enable row level security;
 alter table public.decks enable row level security;
 alter table public.cards enable row level security;
 alter table public.review_logs enable row level security;
 alter table public.writing_logs enable row level security;
+alter table public.reading_progress enable row level security;
 
 drop policy if exists "app_config_select_allowed" on public.app_config;
 create policy "app_config_select_allowed" on public.app_config
@@ -242,6 +265,19 @@ for insert with check (public.is_allowed_user() and auth.uid() = owner_id);
 
 drop policy if exists "writing_logs_update_allowed" on public.writing_logs;
 create policy "writing_logs_update_allowed" on public.writing_logs
+for update using (public.is_allowed_user() and auth.uid() = owner_id)
+with check (public.is_allowed_user() and auth.uid() = owner_id);
+
+drop policy if exists "reading_progress_select_allowed" on public.reading_progress;
+create policy "reading_progress_select_allowed" on public.reading_progress
+for select using (public.is_allowed_user() and auth.uid() = owner_id);
+
+drop policy if exists "reading_progress_insert_allowed" on public.reading_progress;
+create policy "reading_progress_insert_allowed" on public.reading_progress
+for insert with check (public.is_allowed_user() and auth.uid() = owner_id);
+
+drop policy if exists "reading_progress_update_allowed" on public.reading_progress;
+create policy "reading_progress_update_allowed" on public.reading_progress
 for update using (public.is_allowed_user() and auth.uid() = owner_id)
 with check (public.is_allowed_user() and auth.uid() = owner_id);
 

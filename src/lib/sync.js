@@ -22,7 +22,9 @@ function combinePushCounts(primaryResult, secondaryResult) {
       decks: (primaryResult?.pushed?.decks || 0) + (secondaryResult?.pushed?.decks || 0),
       cards: (primaryResult?.pushed?.cards || 0) + (secondaryResult?.pushed?.cards || 0),
       reviewLogs: (primaryResult?.pushed?.reviewLogs || 0) + (secondaryResult?.pushed?.reviewLogs || 0),
-      writingLogs: (primaryResult?.pushed?.writingLogs || 0) + (secondaryResult?.pushed?.writingLogs || 0)
+      writingLogs: (primaryResult?.pushed?.writingLogs || 0) + (secondaryResult?.pushed?.writingLogs || 0),
+      readingProgress:
+        (primaryResult?.pushed?.readingProgress || 0) + (secondaryResult?.pushed?.readingProgress || 0)
     }
   }
 }
@@ -134,6 +136,20 @@ function serializeWritingLog(entry, ownerId) {
     score: entry.score,
     stroke_count: entry.strokeCount,
     updated_at: entry.updatedAt
+  }
+}
+
+function serializeReadingProgress(entry, ownerId) {
+  return {
+    id: entry.syncId,
+    owner_id: ownerId,
+    book_slug: entry.bookSlug,
+    chapter: entry.chapter ?? 1,
+    paragraph: entry.paragraph ?? 0,
+    finished_chapters: Array.isArray(entry.finishedChapters) ? entry.finishedChapters : [],
+    created_at: entry.createdAt,
+    updated_at: entry.updatedAt,
+    deleted_at: entry.deletedAt
   }
 }
 
@@ -346,34 +362,89 @@ async function upsertRemoteWritingLogs(rows) {
   }
 }
 
+// Reading position is last-write-wins, but the set of finished chapters is
+// unioned: finishing chapter 12 on the tablet must not be erased by a device
+// that only knows about chapters 1-11.
+async function upsertRemoteReadingProgress(rows) {
+  if (!rows.length) return
+
+  for (const row of rows) {
+    const existing = await db.readingProgress.where('syncId').equals(row.id).first()
+
+    const remoteFinished = Array.isArray(row.finished_chapters) ? row.finished_chapters : []
+    const localFinished = Array.isArray(existing?.finishedChapters) ? existing.finishedChapters : []
+    const merged = [...new Set([...localFinished, ...remoteFinished])].sort(
+      (left, right) => left - right
+    )
+    const gainedLocally = merged.length > remoteFinished.length
+
+    if (shouldKeepLocalVersion(existing, row.updated_at, row.deleted_at)) {
+      if (gainedLocally && existing) {
+        await db.readingProgress.update(existing.id, { finishedChapters: merged, dirty: true })
+      }
+      continue
+    }
+
+    const keepLocalPosition = existing?.dirty && isLocalNewer(existing.updatedAt, row.updated_at)
+
+    const payload = {
+      syncId: row.id,
+      bookSlug: row.book_slug,
+      chapter: keepLocalPosition ? existing.chapter : row.chapter ?? 1,
+      paragraph: keepLocalPosition ? existing.paragraph : row.paragraph ?? 0,
+      finishedChapters: merged,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      deletedAt: row.deleted_at,
+      dirty: gainedLocally || Boolean(keepLocalPosition)
+    }
+
+    if (existing) {
+      await db.readingProgress.update(existing.id, payload)
+    } else {
+      await db.readingProgress.add(payload)
+    }
+  }
+}
+
 async function pullFromCloud({ replaceLocal = false } = {}) {
-  const [decks, cards, reviewLogs, writingLogs] = await Promise.all([
+  const [decks, cards, reviewLogs, writingLogs, readingProgress] = await Promise.all([
     fetchRemoteTable('decks'),
     fetchRemoteTable('cards'),
     fetchRemoteTable('review_logs'),
-    fetchRemoteTable('writing_logs')
+    fetchRemoteTable('writing_logs'),
+    // Tolerated as optional so a device still syncs before the reading_progress
+    // table has been created in Supabase.
+    fetchRemoteTable('reading_progress').catch(() => null)
   ])
 
-  await db.transaction('rw', [db.decks, db.cards, db.reviewLog, db.writingLog], async () => {
-    if (replaceLocal) {
-      await db.reviewLog.clear()
-      await db.writingLog.clear()
-      await db.cards.clear()
-      await db.decks.clear()
-    }
+  await db.transaction(
+    'rw',
+    [db.decks, db.cards, db.reviewLog, db.writingLog, db.readingProgress],
+    async () => {
+      if (replaceLocal) {
+        await db.reviewLog.clear()
+        await db.writingLog.clear()
+        await db.cards.clear()
+        await db.decks.clear()
+        await db.readingProgress.clear()
+      }
 
-    await upsertRemoteDecks(decks)
-    await upsertRemoteCards(cards)
-    await upsertRemoteReviewLogs(reviewLogs)
-    await upsertRemoteWritingLogs(writingLogs)
-  })
+      await upsertRemoteDecks(decks)
+      await upsertRemoteCards(cards)
+      await upsertRemoteReviewLogs(reviewLogs)
+      await upsertRemoteWritingLogs(writingLogs)
+      if (readingProgress) await upsertRemoteReadingProgress(readingProgress)
+    }
+  )
 
   return {
     pulled: {
       decks: decks.length,
       cards: cards.length,
       reviewLogs: reviewLogs.length,
-      writingLogs: writingLogs.length
+      writingLogs: writingLogs.length,
+      readingProgress: readingProgress?.length || 0
     }
   }
 }
@@ -440,11 +511,12 @@ async function markRowsSynced(table, syncIds) {
 }
 
 async function pushRowsToCloud(userId, { includeClean = false } = {}) {
-  const [decks, cards, reviewLogs, writingLogs] = await Promise.all([
+  const [decks, cards, reviewLogs, writingLogs, readingProgress] = await Promise.all([
     db.decks.toArray(),
     db.cards.toArray(),
     db.reviewLog.toArray(),
-    db.writingLog.toArray()
+    db.writingLog.toArray(),
+    db.readingProgress.toArray()
   ])
 
   const deckRows = decks
@@ -477,12 +549,30 @@ async function pushRowsToCloud(userId, { includeClean = false } = {}) {
   await upsertRemoteRows('writing_logs', writingRows)
   await markRowsSynced(db.writingLog, writingRows.map(row => row.id))
 
+  // Skipped rather than fatal when the table has not been created in Supabase
+  // yet, so an out-of-date database cannot break the rest of the sync.
+  let readingRowsPushed = 0
+  const readingRows = readingProgress
+    .filter(entry => (includeClean || entry.dirty) && entry.bookSlug)
+    .map(entry => serializeReadingProgress(entry, userId))
+
+  try {
+    await upsertRemoteRows('reading_progress', readingRows)
+    await markRowsSynced(db.readingProgress, readingRows.map(row => row.id))
+    readingRowsPushed = readingRows.length
+  } catch (error) {
+    if (!/relation .* does not exist|schema cache|Could not find the table/i.test(error.message)) {
+      throw error
+    }
+  }
+
   return {
     pushed: {
       decks: deckRows.length,
       cards: cardRows.length,
       reviewLogs: reviewRows.length,
-      writingLogs: writingRows.length
+      writingLogs: writingRows.length,
+      readingProgress: readingRowsPushed
     }
   }
 }

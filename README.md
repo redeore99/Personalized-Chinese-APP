@@ -1,6 +1,6 @@
 # Personalized Chinese App
 
-A single-owner Chinese study PWA with spaced repetition review, Hanzi writing practice, Supabase account auth, cloud sync, and a local Dexie cache for fast browser storage. It now also works as a daily study coach: streaks, a composed daily session, push reminders, curated video content, an offline dictionary, and an article-mining reading mode.
+A single-owner Chinese study PWA with spaced repetition review, Hanzi writing practice, Supabase account auth, cloud sync, and a local Dexie cache for fast browser storage. It now also works as a daily study coach: streaks, a composed daily session, push reminders, curated video content, an offline dictionary, an article-mining reading mode, and an offline book reader.
 
 ## Current Stack
 - React 18 + Vite 6
@@ -10,7 +10,8 @@ A single-owner Chinese study PWA with spaced repetition review, Hanzi writing pr
 - Supabase Edge Function (`send-due-push`) + pg_cron for daily Web Push reminders
 - HanziWriter for writing practice
 - Web Speech API for card audio (TTS)
-- CC-CEDICT (downloaded on demand) for offline dictionary lookups
+- CC-CEDICT, bundled and self-hosted (~125k entries, downloaded on demand) for offline dictionary lookups
+- Public-domain books from Project Gutenberg, prepared into per-chapter JSON at build time
 - Vercel for deployment from GitHub
 
 ## Habit & Content Layer (new)
@@ -19,6 +20,7 @@ A single-owner Chinese study PWA with spaced repetition review, Hanzi writing pr
 - Daily Web Push reminders (Android/desktop; installed PWA) with a due-count app icon badge. Enable/disable and test from Settings.
 - Watch tab: curated channels and shortcuts (SyS Mandarin songs/stories/news, Chinese Zero to Hero, Grace Mandarin, ShuoshuoChinese) with topic filters and a deterministic daily pick.
 - Article Mode: paste Chinese text, segment it against CC-CEDICT plus your own cards, see known/new coverage, tap any word to look it up, hear it, open it in Pleco, or add it as a card.
+- Read a Book (`/read`): 西游记 in 100 chapters, prepared from Project Gutenberg #23962 and converted to simplified. Same tap-a-word popup as Article Mode plus the surrounding sentence, an optional pinyin ruby layer, a simplified/traditional toggle, per-paragraph audio, adjustable text size, and a reading position that follows you across devices. Chapters cache as you read, or save all 100 for offline reading.
 - Add Card auto-fills pinyin and meaning from the offline dictionary.
 - Prebuilt decks now include HSK 5, Economics · Core (190 econ/finance terms), and Radicals & Components (110 radicals with names and example characters).
 - Review cards speak via TTS, and long words or sentences auto-shrink to fit the card.
@@ -64,6 +66,8 @@ Tracked files stay generic on purpose. Private owner-specific values should stay
 - Pleco sync is manual and file-based on purpose. Export a `.txt` file from Pleco whenever needed, then refresh from that file inside the app.
 - If app behavior changes, the project guidance files should be refreshed so future sessions inherit the correct architecture.
 - This app now has deck metadata columns in Supabase. If you deploy the latest code, rerun the latest schema SQL before relying on cross-device deck organization.
+- The book reader adds a `reading_progress` table. Sync keeps working without it, but reading position will not follow you across devices until the latest SQL is rerun.
+- The offline dictionary previously came from a third-party mirror that carried only about a third of CC-CEDICT. It is now bundled in `public/dict/`. Every device must re-download the dictionary once from Settings to get the missing entries.
 
 ## Development
 ```bash
@@ -71,4 +75,10 @@ npm install
 npm run dev
 npm run build
 npm run preview
+```
+
+Content generation (only needed when changing the dictionary or adding a book):
+```bash
+npm run update-dictionary
+npm run prepare-book
 ```

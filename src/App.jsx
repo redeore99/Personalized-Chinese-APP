@@ -9,6 +9,7 @@ import DecksPage from './pages/DecksPage'
 import SettingsPage from './pages/SettingsPage'
 import WatchPage from './pages/WatchPage'
 import ArticlePage from './pages/ArticlePage'
+import ReadPage from './pages/ReadPage'
 import AuthGate from './components/AuthGate'
 import { getStats } from './lib/db'
 import { updateAppBadge } from './lib/push'
@@ -81,6 +82,9 @@ function App() {
           <Route path="/decks" element={<DecksPage onRefresh={refreshStats} />} />
           <Route path="/watch" element={<WatchPage />} />
           <Route path="/article" element={<ArticlePage onRefresh={refreshStats} />} />
+          <Route path="/read" element={<ReadPage onRefresh={refreshStats} />} />
+          <Route path="/read/:slug" element={<ReadPage onRefresh={refreshStats} />} />
+          <Route path="/read/:slug/:chapter" element={<ReadPage onRefresh={refreshStats} />} />
           <Route path="/settings" element={<SettingsPage onRefresh={refreshStats} />} />
         </Routes>
 

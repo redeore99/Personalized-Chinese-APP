@@ -488,9 +488,17 @@ export default function SettingsPage({ onRefresh }) {
         <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Offline Dictionary</h3>
         <p className="text-secondary" style={{ fontSize: 13, marginBottom: 12, lineHeight: 1.5 }}>
           {dictStatus.loaded
-            ? `CC-CEDICT is installed on this device (${dictStatus.entryCount.toLocaleString()} entries). Powers Add Card auto-fill and Article Mode.`
-            : 'Download the free CC-CEDICT dictionary (~8 MB, one time) to enable Add Card auto-fill and Article Mode.'}
+            ? `CC-CEDICT is installed on this device (${dictStatus.entryCount.toLocaleString()} entries). Powers Add Card auto-fill, Article Mode and the book reader.`
+            : 'Download the free CC-CEDICT dictionary (~3.8 MB, one time) to enable Add Card auto-fill, Article Mode and the book reader.'}
         </p>
+
+        {dictStatus.outdated && (
+          <div className="card-message card-message-warning" style={{ marginBottom: 12 }}>
+            This device holds an old, truncated dictionary
+            ({dictStatus.entryCount.toLocaleString()} entries instead of ~125,000). Re-download it
+            to restore the missing definitions.
+          </div>
+        )}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button className="btn btn-primary btn-sm" onClick={handleDownloadDict} disabled={dictBusy}>
             {dictBusy ? (dictProgress || 'Working...') : dictStatus.loaded ? 'Re-download / Update' : 'Download Dictionary'}

@@ -443,6 +443,23 @@ db.version(6).stores({
   dict: '++id, simp'
 })
 
+db.version(7).stores({
+  cards: '++id, syncId, deckId, deckSyncId, character, pinyin, nextReview, lastReview, createdAt, updatedAt, deletedAt, dirty, suspended, *tags',
+  decks: '++id, syncId, slug, name, kind, sourceKey, sortOrder, updatedAt, deletedAt, dirty',
+  reviewLog: '++id, syncId, cardId, cardSyncId, reviewedAt, updatedAt, dirty',
+  writingLog: '++id, syncId, cardId, cardSyncId, practicedAt, updatedAt, dirty',
+  security: 'key',
+  meta: 'key',
+  dict: '++id, simp',
+  // Device-local cache of downloaded book chapters, like `dict`. Never synced:
+  // the text is public-domain content that can be re-fetched from /books at
+  // any time, so replicating it through Supabase would only waste quota.
+  bookChapters: '[bookSlug+n], bookSlug',
+  // Reading position, synced so a chapter finished on the tablet is not
+  // re-read on another device.
+  readingProgress: '++id, syncId, bookSlug, updatedAt, deletedAt, dirty'
+})
+
 export async function setMetaValue(key, value) {
   await db.meta.put({ key, value, updatedAt: nowIso() })
 }
@@ -1397,6 +1414,69 @@ export async function getStudyActivity(limit = 12) {
   return [...reviewItems, ...writingItems]
     .sort((left, right) => right.performedAt.localeCompare(left.performedAt))
     .slice(0, limit)
+}
+
+// --- Book reader -----------------------------------------------------------
+// Chapter text is cached per device (never synced); reading position is synced.
+
+export async function getCachedChapter(bookSlug, n) {
+  const row = await db.bookChapters.get([bookSlug, n])
+  return row || null
+}
+
+export async function putCachedChapter(bookSlug, n, chapter) {
+  await db.bookChapters.put({ bookSlug, n, ...chapter, cachedAt: nowIso() })
+}
+
+export async function countCachedChapters(bookSlug) {
+  return db.bookChapters.where('bookSlug').equals(bookSlug).count()
+}
+
+export async function clearCachedBook(bookSlug) {
+  await db.bookChapters.where('bookSlug').equals(bookSlug).delete()
+}
+
+export async function getReadingProgress(bookSlug) {
+  const row = await db.readingProgress.where('bookSlug').equals(bookSlug).first()
+  if (!row || row.deletedAt) return null
+
+  return {
+    ...row,
+    finishedChapters: Array.isArray(row.finishedChapters) ? row.finishedChapters : []
+  }
+}
+
+export async function saveReadingProgress(bookSlug, patch = {}) {
+  const existing = await db.readingProgress.where('bookSlug').equals(bookSlug).first()
+  const payload = {
+    bookSlug,
+    chapter: patch.chapter ?? existing?.chapter ?? 1,
+    paragraph: patch.paragraph ?? existing?.paragraph ?? 0,
+    finishedChapters: patch.finishedChapters
+      ?? (Array.isArray(existing?.finishedChapters) ? existing.finishedChapters : []),
+    updatedAt: nowIso(),
+    deletedAt: null,
+    dirty: true
+  }
+
+  if (existing) {
+    await db.readingProgress.update(existing.id, payload)
+    return { ...existing, ...payload }
+  }
+
+  const record = { syncId: createSyncId(), createdAt: nowIso(), ...payload }
+  const id = await db.readingProgress.add(record)
+  return { ...record, id }
+}
+
+export async function markChapterFinished(bookSlug, n) {
+  const progress = await getReadingProgress(bookSlug)
+  const finished = new Set(progress?.finishedChapters || [])
+  finished.add(n)
+
+  return saveReadingProgress(bookSlug, {
+    finishedChapters: [...finished].sort((left, right) => left - right)
+  })
 }
 
 export async function getStats() {

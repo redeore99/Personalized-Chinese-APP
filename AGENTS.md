@@ -20,6 +20,7 @@ This is a single-owner Chinese study PWA with:
 - Supabase Auth and Postgres for account login and cloud sync
 - daily-habit coaching: streaks, a composed daily session, push reminders, curated videos
 - an offline CC-CEDICT dictionary with an article-mining reading mode
+- an offline book reader for prepared public-domain texts
 - Vercel deployment from GitHub
 
 The old local PIN lock system has been removed. Do not describe it as the current architecture and do not reintroduce it casually.
@@ -28,7 +29,7 @@ The old local PIN lock system has been removed. Do not describe it as the curren
 - `src/main.jsx`
   Wraps the app in `AuthProvider` and `SyncProvider`.
 - `src/App.jsx`
-  Routes the app (including `/watch` and `/article`), gates everything behind `AuthGate`, and keeps the app-icon due-count badge in sync.
+  Routes the app (including `/watch`, `/article`, and `/read/:slug?/:chapter?`), gates everything behind `AuthGate`, and keeps the app-icon due-count badge in sync.
 - `src/components/AuthGate.jsx`
   Shows the setup screen when Supabase env vars are missing and the sign-in form when auth is required, including the Cloudflare Turnstile widget used before password sign-in.
 - `src/components/TurnstileWidget.jsx`
@@ -53,9 +54,9 @@ The old local PIN lock system has been removed. Do not describe it as the curren
 - `src/lib/plecoImport.js`
   Parses Pleco `.txt` exports for linked manual refresh, including Pleco's tab-separated flashcard export format with `// Section` markers, unions repeated rows into unique cards, maps one primary Pleco category to the target deck, keeps extra categories as tags, ignores suspicious category values that look like full flashcard text, and converts numbered-tone pinyin (e.g. `ni3 hao3`) to accented pinyin (e.g. `nǐ hǎo`) during import.
 - `src/lib/db.js`
-  Dexie schema plus local CRUD helpers. It now stores richer deck metadata, supports card browsing/editing queries, refreshes linked Pleco decks without destructive overwrites or duplicate cards across repeated device exports, bulk-deletes cards through tombstones, bulk-deletes decks by tombstoning the deck while detaching cards to standalone, and exposes recent study activity helpers alongside the sync metadata fields such as `syncId`, `updatedAt`, `dirty`, and `deletedAt`. Pleco linked refresh can also upgrade existing numbered-tone pinyin to accented pinyin when a fresh import supplies the accented version. Schema v6 adds the device-local `dict` table for the offline CC-CEDICT cache (never synced).
+  Dexie schema plus local CRUD helpers. It now stores richer deck metadata, supports card browsing/editing queries, refreshes linked Pleco decks without destructive overwrites or duplicate cards across repeated device exports, bulk-deletes cards through tombstones, bulk-deletes decks by tombstoning the deck while detaching cards to standalone, and exposes recent study activity helpers alongside the sync metadata fields such as `syncId`, `updatedAt`, `dirty`, and `deletedAt`. Pleco linked refresh can also upgrade existing numbered-tone pinyin to accented pinyin when a fresh import supplies the accented version. Schema v6 adds the device-local `dict` table for the offline CC-CEDICT cache (never synced). Schema v7 adds `bookChapters` (device-local cache of downloaded book chapters, never synced) and `readingProgress` (one row per book, synced) plus the reading helpers.
 - `src/lib/sync.js`
-  Pulls remote rows into Dexie using paginated fetches (1000 rows per page, loops until all rows retrieved), pushes dirty local rows to Supabase in batches of 500, can report cloud counts, automatically runs a full-library reconcile when local and cloud counts still disagree, treats deletions as tombstones so stale undeleted rows do not resurrect records, allows an active cloud row to heal a stale synced local tombstone, detaches active cards from deleted deck links during pull so they do not become invisible orphan records, and falls back to the legacy deck shape until the latest Supabase deck columns have been applied.
+  Pulls remote rows into Dexie using paginated fetches (1000 rows per page, loops until all rows retrieved), pushes dirty local rows to Supabase in batches of 500, can report cloud counts, automatically runs a full-library reconcile when local and cloud counts still disagree, treats deletions as tombstones so stale undeleted rows do not resurrect records, allows an active cloud row to heal a stale synced local tombstone, detaches active cards from deleted deck links during pull so they do not become invisible orphan records, and falls back to the legacy deck shape until the latest Supabase deck columns have been applied. It also syncs `reading_progress`: the reading position is last-write-wins, but the set of finished chapters is unioned across devices so finishing a chapter on one device is never erased by another. Both the pull and the push of that table tolerate the table being absent, so a device still syncs everything else before the v7 SQL has been applied. Reading progress is deliberately excluded from the count-drift check that triggers a full library reconcile.
 - `src/lib/backup.js`
   Encrypted export and restore for the local cache using a separate backup password.
 - `src/lib/habits.js`
@@ -67,7 +68,16 @@ The old local PIN lock system has been removed. Do not describe it as the curren
 - `public/push-sw.js`
   Push + notification-click handlers, merged into the generated service worker via the workbox `importScripts` option in `vite.config.js`.
 - `src/lib/dict.js`
-  Offline CC-CEDICT dictionary: downloads ~8 MB from jsDelivr on demand into the Dexie `dict` table (schema v6, device-local, never synced). Powers Add Card auto-fill, article segmentation (greedy longest match), and word lookups.
+  Offline CC-CEDICT dictionary: downloads `/dict/cedict_ts.u8.gz` (~3.8 MB gzipped, ~125k entries) from the app's own origin on demand into the Dexie `dict` table (device-local, never synced). Powers Add Card auto-fill, article/book segmentation (greedy longest match), and word lookups. It detects the gzip magic number so it works whether or not the host applies `Content-Encoding: gzip`, and refuses any download with fewer than `DICT_MIN_ENTRIES` (100k) entries. `getDictStatus()` reports `outdated: true` for devices still holding the old truncated dictionary so Settings can prompt a re-download.
+  Historical note: this used to point at a third-party jsDelivr mirror that silently carried only 43,848 of ~125,000 entries. Do not repoint it at an unpinned third-party mirror.
+- `src/lib/books.js`
+  Book catalog plus chapter loading: fetches `/books/<slug>/index.json` and `/books/<slug>/ch-NNN.json` on demand, caches chapters in the Dexie `bookChapters` table, and exposes a "save all chapters offline" bulk download.
+- `src/components/WordPopup.jsx`
+  Shared tap-a-word panel (pinyin, definitions, TTS, Pleco hand-off, add-to-deck) used by both Article Mode and the book reader.
+- `scripts/update-dictionary.mjs`
+  Refreshes `public/dict/cedict_ts.u8.gz` from the official MDBG CC-CEDICT release. Run with `npm run update-dictionary`. It is bundled rather than fetched at runtime because mdbg.net sends no CORS header.
+- `scripts/prepare-book.mjs`
+  Downloads a Project Gutenberg text, splits it into chapters, converts traditional to simplified using the bundled CC-CEDICT, and writes `public/books/<slug>/`. Run with `npm run prepare-book`. Requires the dictionary file to exist first.
 - `src/data/econ1.js` / `src/data/radicals.js`
   Prebuilt deck content: Economics · Core (economics and finance vocabulary; the owner is an economist) and Radicals & Components (radical forms with Chinese radical names and example characters for reading skill).
 - `src/data/videos.js`
@@ -75,7 +85,9 @@ The old local PIN lock system has been removed. Do not describe it as the curren
 - `src/pages/WatchPage.jsx`
   Curated video hub with topic chip filters. Opening any link marks the watch step of Today's Session as done.
 - `src/pages/ArticlePage.jsx`
-  Reading tool: paste Chinese text, segment against CC-CEDICT plus the user's own cards, show known/new/coverage stats, tap a word for definitions, TTS, Pleco, and one-tap card creation into a chosen deck.
+  Reading tool: paste Chinese text, segment against CC-CEDICT plus the user's own cards, show known/new/coverage stats, tap a word for definitions, TTS, Pleco, and one-tap card creation into a chosen deck. Uses the shared `WordPopup`.
+- `src/pages/ReadPage.jsx`
+  Book reader: chapter list with finished markers, per-chapter known/new coverage, tap-a-word lookup via `WordPopup` with the surrounding sentence, optional pinyin ruby, simplified/traditional toggle, font size control, per-paragraph TTS, scroll position remembered per book, and a bulk "save all chapters offline" action.
 - `supabase/functions/send-due-push/index.ts`
   Edge function sending the daily "cards due" Web Push. Auth: pg_cron caller must present `x-cron-secret` matching `public.push_private.cron_secret`; the in-app test button authenticates as the allowed user via JWT. Deployed with verify_jwt=false because auth is enforced inside the function.
 - `src/pages/HomePage.jsx`
@@ -91,7 +103,7 @@ The old local PIN lock system has been removed. Do not describe it as the curren
 - `src/pages/ReviewPage.jsx`
   SRS review with optional `?limit=N` session cap that reserves slots for never-reviewed cards, adaptive font sizing for long words/sentences, TTS pronunciation, and Pleco lookup.
 - `supabase/schema.sql`
-  Public generic SQL schema with placeholder email, owner-scoped sync tables, deck metadata columns, server-side sync guards, and the push notification section (push_private, push_subscriptions, get_vapid_public_key, pg_cron/pg_net with a commented schedule block).
+  Public generic SQL schema with placeholder email, owner-scoped sync tables (including `reading_progress`), deck metadata columns, server-side sync guards, and the push notification section (push_private, push_subscriptions, get_vapid_public_key, pg_cron/pg_net with a commented schedule block).
 - `supabase/schema.local.sql`
   Local-only, gitignored SQL schema containing the real allowed email and mirroring the current public schema, plus notes on the already-applied live push setup.
 - `SETUP.md`
@@ -144,6 +156,11 @@ Examples:
   Update `SETUP.local.md` and any local-only files that hold private values.
 - If you change the edge function:
   Update `supabase/functions/send-due-push/index.ts` in the repo AND redeploy the function to Supabase (they do not deploy automatically from the repo).
+- If you add or regenerate a book:
+  Run `npm run prepare-book` and commit the generated `public/books/<slug>/` files, then register the book in `src/lib/books.js`.
+  Only use texts that are genuinely public domain, and record the source in the book entry.
+- If you change the bundled dictionary:
+  Run `npm run update-dictionary`, commit `public/dict/cedict_ts.u8.gz`, and tell the user every device must re-download the dictionary from Settings — the old copy stays in IndexedDB until then.
 
 Do not stop at "the code is changed" if the app will still be broken until the user updates Supabase, Vercel, or GitHub.
 
@@ -196,11 +213,18 @@ Working now:
 - Today's Session habit card: streak counter, daily goal progress bar, capped review session (`/review?limit=N`) that reserves slots for never-reviewed cards, writing step, daily video pick, and a 7-day activity strip
 - daily Web Push reminders via `send-due-push` edge function + pg_cron (05:30 UTC), with in-app enable/disable and end-to-end test button, plus an app-icon due-count badge
 - Watch tab with verified channels and topic shortcuts (songs, stories, news/economy, characters) and a deterministic daily pick that feeds Today's Session
-- offline CC-CEDICT dictionary (on-demand ~8 MB download into Dexie) powering Add Card auto-fill and Article Mode
+- offline CC-CEDICT dictionary, self-hosted and complete (~125k entries, on-demand ~3.8 MB gzipped download into Dexie), powering Add Card auto-fill, Article Mode, and the book reader
 - Article Mode reading tool: segmentation, known/new coverage stats, tap-to-lookup, and one-tap card creation
+- book reader (`/read`) with 西游记 (Project Gutenberg #23962) prepared into 100 chapters: on-demand or bulk-offline chapter caching, tap-a-word lookup with the surrounding sentence, pinyin ruby toggle, simplified/traditional toggle, per-paragraph TTS, and cross-device reading position
 - prebuilt Economics · Core and Radicals & Components decks alongside HSK 5, each with course/video links where relevant
 - TTS audio on review, writing, and article screens via the Web Speech API
 - adaptive font sizing on review cards so long words and sentences fit
+
+Known limitations of the reader:
+- 西游记 is Ming vernacular, so only ~29% of its tokens resolve to multi-character words against CC-CEDICT, versus ~65% for modern Chinese prose. The popup will often gloss a single character rather than a word. This is a property of the text, not a bug.
+- 66 glyphs are corrupted to `?` in the Project Gutenberg source and are kept as-is.
+- Paragraph indentation in the source occasionally marks a prose line as verse, so `.reader-verse` styling is deliberately subtle.
+- The reader is not yet wired into the Today's Session habit card.
 
 Still missing or incomplete:
 - fresh specific-video rotation in the Watch tab (channel shortcuts are stable; the weekly content task should append real video entries to `WATCH_VIDEOS` via channel RSS feeds)
