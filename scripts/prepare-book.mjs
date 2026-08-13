@@ -13,6 +13,7 @@
 // gutenberg.org itself is not reachable from every network (TLS chain issues),
 // so the mirrors below are tried in order.
 
+import { createHash } from 'node:crypto'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -296,6 +297,10 @@ async function main() {
   let totalHanzi = 0
   let corrupted = 0
   const corpus = []
+  // Content hash of every chapter, published in index.json so devices can tell
+  // that a cached chapter predates a regeneration and refetch it. Without this
+  // a phone keeps whatever it downloaded first, forever.
+  const contentHash = createHash('sha1')
 
   for (const chapter of chapters) {
     const paragraphs = chapter.blocks.map(paragraph => {
@@ -323,11 +328,9 @@ async function main() {
     const title = { t: chapter.title, s: toSimplified(chapter.title, maps, stats) }
     const file = `ch-${String(chapter.n).padStart(3, '0')}.json`
 
-    await writeFile(
-      resolve(outDir, file),
-      JSON.stringify({ book: BOOK.slug, n: chapter.n, title, hanzi, paragraphs }),
-      'utf8'
-    )
+    const payload = JSON.stringify({ book: BOOK.slug, n: chapter.n, title, hanzi, paragraphs })
+    contentHash.update(payload)
+    await writeFile(resolve(outDir, file), payload, 'utf8')
 
     index.push({ n: chapter.n, title, hanzi, file })
   }
@@ -347,6 +350,7 @@ async function main() {
           url: `https://www.gutenberg.org/ebooks/${BOOK.gutenbergId}`,
           license: 'Public domain (Project Gutenberg License)'
         },
+        version: contentHash.digest('hex').slice(0, 12),
         chapterCount: index.length,
         totalHanzi,
         chapters: index,

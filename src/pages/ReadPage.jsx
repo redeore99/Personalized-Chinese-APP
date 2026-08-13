@@ -9,7 +9,8 @@ import {
   getBookCacheStatus,
   loadBookIndex,
   loadBookLexicon,
-  loadChapter
+  loadChapter,
+  pruneStaleChapters
 } from '../lib/books'
 import {
   addCard,
@@ -77,7 +78,9 @@ export default function ReadPage({ onRefresh }) {
       getDictStatus(),
       getDeckOptions(),
       getMetaValue(SETTINGS_KEY),
-      getBookCacheStatus(slug),
+      // Chapters cached from an earlier build hold superseded text, so they are
+      // dropped before the offline count is reported.
+      pruneStaleChapters(slug).then(() => getBookCacheStatus(slug)),
       loadBookLexicon(slug)
     ])
       .then(([bookIndex, saved, dict, deckOptions, savedSettings, cache, bookLexicon]) => {

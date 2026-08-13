@@ -79,6 +79,7 @@ The old local PIN lock system has been removed. Do not describe it as the curren
   Hand-curated proper nouns and Ming vocabulary CC-CEDICT lacks (老孙, 甚么, 却说, 弼马温, 觔斗云…), with pinyin and a gloss. Only words absent from CC-CEDICT and genuinely opaque belong here; transparent compounds such as 那怪 are deliberately excluded because splitting them teaches more. `prepare-book.mjs` folds them into the book lexicon.
 - `src/lib/books.js`
   Book catalog plus chapter loading: fetches `/books/<slug>/index.json` and `/books/<slug>/ch-NNN.json` on demand, caches chapters in the Dexie `bookChapters` table, and exposes a "save all chapters offline" bulk download.
+  Cached chapters carry the `version` published in `index.json` (a content hash emitted by `prepare-book.mjs`). A chapter is reused only when its stamp matches, and `pruneStaleChapters()` drops the rest when the reader opens. Without this a device keeps whatever text it downloaded first even after the book is regenerated — the phone would still be reading 干坤 for 乾坤.
 - `src/components/WordPopup.jsx`
   Shared tap-a-word panel (pinyin, definitions, TTS, Pleco hand-off, add-to-deck) used by both Article Mode and the book reader.
 - `scripts/update-dictionary.mjs`

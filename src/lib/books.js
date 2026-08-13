@@ -1,6 +1,7 @@
 import {
   clearCachedBook,
   countCachedChapters,
+  dropChaptersOtherThanVersion,
   getCachedChapter,
   putCachedChapter
 } from './db'
@@ -101,8 +102,13 @@ function chapterFile(n) {
 }
 
 export async function loadChapter(slug, n) {
+  const index = await loadBookIndex(slug).catch(() => null)
+  const version = index?.version || null
+
   const cached = await getCachedChapter(slug, n)
-  if (cached?.paragraphs) {
+  // A cached chapter from before a regeneration holds superseded text, so it is
+  // only reused when its stamp matches the version currently published.
+  if (cached?.paragraphs && cached.version === version) {
     return cached
   }
 
@@ -113,12 +119,26 @@ export async function loadChapter(slug, n) {
 
   const chapter = await response.json()
   await putCachedChapter(slug, n, {
+    version,
     title: chapter.title,
     hanzi: chapter.hanzi,
     paragraphs: chapter.paragraphs
   })
 
   return chapter
+}
+
+/**
+ * Drops chapters cached from an earlier build of the book. Called when the
+ * reader opens so a stale offline copy is replaced rather than silently read,
+ * and so superseded rows stop occupying space on the device.
+ */
+export async function pruneStaleChapters(slug) {
+  const index = await loadBookIndex(slug).catch(() => null)
+  if (!index?.version) return { removed: 0 }
+
+  const removed = await dropChaptersOtherThanVersion(slug, index.version)
+  return { removed }
 }
 
 export async function getBookCacheStatus(slug) {

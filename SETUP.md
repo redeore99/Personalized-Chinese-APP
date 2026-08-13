@@ -104,6 +104,20 @@ Earlier builds pulled the dictionary from a third-party mirror that carried only
 device is still holding that old copy. The file now ships with the app itself, so this cannot drift
 again.
 
+## Where The App Stores Things On Your Device
+Nothing is written to the phone's file system as visible files. Everything lives in the
+browser's storage for this site:
+
+- **IndexedDB** — your cards, decks and logs, the offline dictionary (~14 MB), downloaded book
+  chapters (~4 MB for all 100), reading position, and the reader's display settings.
+- **Cache Storage** — the app shell (HTML, JS, CSS, icons), about 1 MB, managed by the service
+  worker.
+
+To see or clear it: on Android, Settings → Apps → the installed app → Storage; in a browser,
+site settings → Storage for the app's domain. Clearing it signs you out and removes the
+dictionary and downloaded chapters, but nothing study-related is lost — cards, decks, review
+history and reading position all live in Supabase and come back on the next sync.
+
 ## Read a Book
 Home → `Read a Book`, or `/read`.
 
@@ -111,8 +125,15 @@ The reader ships with 西游记 (Journey to the West), prepared from Project Gut
 converted from traditional to simplified. It needs the offline dictionary above.
 
 - Chapters download as you open them, and stay on the device afterwards.
-- `Save all chapters offline` downloads all 100 at once (about 4.5 MB) for reading without a
+- `Save all chapters offline` downloads all 100 at once (about 4.1 MB) for reading without a
   connection.
+- Storage on the device is bounded and does not grow with repeated downloads. Re-downloading
+  the dictionary clears the old copy first, and chapters are keyed by book and number so a
+  refetch replaces the row rather than adding one. With everything saved offline the app uses
+  roughly 30 MB: about 14 MB for the dictionary, 4 MB for the book, the rest app shell and
+  IndexedDB overhead. A phone typically allows several gigabytes per site.
+- If the book is ever regenerated, chapters cached from the older build are detected by their
+  version stamp and refetched automatically the next time the reader opens.
 - Tap any word for pinyin, definitions, the sentence it appeared in, audio, Pleco, and one-tap card
   creation into any deck.
 - `pīn` toggles pinyin above each word, `简/繁` switches between simplified and traditional, and

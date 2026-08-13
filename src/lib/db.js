@@ -1436,6 +1436,21 @@ export async function clearCachedBook(bookSlug) {
   await db.bookChapters.where('bookSlug').equals(bookSlug).delete()
 }
 
+// Removes chapters cached from an earlier build of the book, so a device does
+// not keep reading superseded text after the book is regenerated.
+export async function dropChaptersOtherThanVersion(bookSlug, version) {
+  const stale = await db.bookChapters
+    .where('bookSlug')
+    .equals(bookSlug)
+    .filter(row => row.version !== version)
+    .toArray()
+
+  if (!stale.length) return 0
+
+  await db.bookChapters.bulkDelete(stale.map(row => [row.bookSlug, row.n]))
+  return stale.length
+}
+
 export async function getReadingProgress(bookSlug) {
   const row = await db.readingProgress.where('bookSlug').equals(bookSlug).first()
   if (!row || row.deletedAt) return null
