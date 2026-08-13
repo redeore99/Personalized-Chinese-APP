@@ -27,11 +27,17 @@ as $$
 $$;
 
 revoke all on function public.is_allowed_user() from public;
+-- `from public` does not remove the grant Supabase makes to the anon role, so
+-- anon is revoked explicitly. The app only calls this with a session present.
+revoke execute on function public.is_allowed_user() from anon;
 grant execute on function public.is_allowed_user() to authenticated;
 
 create or replace function public.protect_sync_row()
 returns trigger
 language plpgsql
+-- Pinned so nothing the function resolves can be shadowed. The body only uses
+-- old/new and now(), and pg_catalog is always implicitly on the path.
+set search_path = ''
 as $$
 begin
   if old.deleted_at is not null and new.deleted_at is null then

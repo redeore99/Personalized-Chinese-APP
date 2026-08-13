@@ -97,7 +97,16 @@ function buildConversionMaps(cedict) {
 
     const [, trad, simp] = match
     for (const char of simp) validSimplified.add(char)
-    if (trad === simp) continue
+
+    if (trad === simp) {
+      // A multi-character word that is identical in both scripts must be
+      // protected: several of its characters convert one-to-many elsewhere
+      // (乾→干, 覆→复, 著→着), and without an identity entry here the
+      // character-level fallback would corrupt 乾坤 into 干坤, 原著 into 原着
+      // and 翻天覆地 into 翻天复地.
+      if ([...trad].length >= 2 && !words.has(trad)) words.set(trad, trad)
+      continue
+    }
 
     if ([...trad].length === 1) {
       // First entry wins: CC-CEDICT lists the common reading first.
