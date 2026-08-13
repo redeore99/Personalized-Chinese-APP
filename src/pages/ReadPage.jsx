@@ -145,24 +145,6 @@ export default function ReadPage({ onRefresh }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.chapter, slug])
 
-  // Paragraphs only exist once the dictionary map has loaded, which can happen
-  // after the chapter itself, so the saved position is restored on the render
-  // that actually has nodes to scroll to.
-  useEffect(() => {
-    if (!chapter || restoreTo.current === null || !paragraphs.length) return
-
-    const index = restoreTo.current
-    restoreTo.current = null
-
-    if (index <= 0) {
-      window.scrollTo(0, 0)
-      return
-    }
-
-    paragraphRefs.current[index]?.scrollIntoView({ block: 'start' })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chapter, paragraphs.length])
-
   // Remember roughly where the reader stopped, without writing on every frame.
   useEffect(() => {
     if (!chapter) return
@@ -246,6 +228,27 @@ export default function ReadPage({ onRefresh }) {
       }
     })
   }, [chapter, readerDict, lexicon, settings.script, knownWords])
+
+  // Must stay below the `paragraphs` memo: a dependency array is evaluated
+  // during render, so referencing paragraphs.length above its own declaration
+  // throws a temporal-dead-zone ReferenceError and blanks the whole page.
+  // Paragraphs only exist once the dictionary has loaded, which can happen
+  // after the chapter, so the saved position is restored on the render that
+  // actually has nodes to scroll to.
+  useEffect(() => {
+    if (!chapter || restoreTo.current === null || !paragraphs.length) return
+
+    const index = restoreTo.current
+    restoreTo.current = null
+
+    if (index <= 0) {
+      window.scrollTo(0, 0)
+      return
+    }
+
+    paragraphRefs.current[index]?.scrollIntoView({ block: 'start' })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chapter, paragraphs.length])
 
   const stats = useMemo(() => {
     if (!paragraphs.length) return null

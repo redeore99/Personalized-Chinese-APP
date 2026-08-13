@@ -246,6 +246,13 @@ Still missing or incomplete:
 
 ## Quick Checks Before Finishing Work
 - Run or request a build verification when code changed.
+- If you changed a page component, actually RENDER it. `npm run build` does not catch runtime
+  errors, and every page sits behind `AuthGate`, so testing the modules in isolation proves
+  nothing about the page. A dependency array referencing a `const` declared further down the
+  component throws a temporal-dead-zone `ReferenceError` and blanks the entire screen while
+  the build stays green — that shipped once. To check a page without signing in, add a
+  temporary probe module that renders it inside a `MemoryRouter` and an error boundary,
+  import it from the dev server console, then delete the probe.
 - Search for stale references to removed architecture, especially the old PIN model.
 - Check whether setup docs still match the current env vars, auth flow, and deployment flow.
 - Check whether the Supabase Auth hardening guidance still matches the current dashboard controls for password rate limits or bot protection.
