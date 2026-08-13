@@ -1,0 +1,35 @@
+{
+  "_comment": "Proper nouns and Ming vocabulary from 西游记 that CC-CEDICT does not carry. Without these the segmenter shatters them into characters and the popup glosses 老孙 as 'old' + 'grandson'. Only words absent from CC-CEDICT and genuinely opaque belong here: transparent compounds such as 那怪 (that + monster) or 老魔 (old + demon) are deliberately left out, because splitting them teaches the reader more. Counts are occurrences in the 100 chapters at the time of curation.",
+
+  "老孙": { "p": "lǎo sūn", "d": "this old Monkey; yours truly (how Sun Wukong refers to himself)" },
+  "老猪": { "p": "lǎo zhū", "d": "this old Pig; yours truly (how Zhu Bajie refers to himself)" },
+  "美猴王": { "p": "měi hóu wáng", "d": "Handsome Monkey King (Sun Wukong's first title)" },
+  "弼马温": { "p": "bì mǎ wēn", "d": "Protector of the Horses (the menial office Heaven fobs off on Sun Wukong)" },
+  "太白金星": { "p": "tài bái jīn xīng", "d": "the Gold Star of Venus; Heaven's elderly envoy" },
+  "女菩萨": { "p": "nǚ pú sà", "d": "lady bodhisattva (polite address to a woman)" },
+
+  "甚么": { "p": "shén me", "d": "what; whatever (Ming spelling of 什么)" },
+  "却说": { "p": "què shuō", "d": "now, the story turns to... (storyteller's transition to a new thread)" },
+  "四众": { "p": "sì zhòng", "d": "the four pilgrims; Tripitaka and his three disciples" },
+  "正果": { "p": "zhèng guǒ", "d": "the true fruit; attainment of enlightenment" },
+
+  "大雷音寺": { "p": "dà léi yīn sì", "d": "the Great Thunderclap Monastery; the Buddha's seat, the goal of the journey" },
+  "东胜神洲": { "p": "dōng shèng shén zhōu", "d": "Purvavideha, the Eastern Continent (where Flower-Fruit Mountain lies)" },
+  "西牛贺洲": { "p": "xī niú hè zhōu", "d": "Godaniya, the Western Continent (where the scriptures are)" },
+  "北俱芦洲": { "p": "běi jù lú zhōu", "d": "Uttarakuru, the Northern Continent" },
+  "五庄观": { "p": "wǔ zhuāng guàn", "d": "the Wuzhuang Temple, home of the ginseng-fruit tree" },
+  "流沙河": { "p": "liú shā hé", "d": "the River of Flowing Sands, where Sha Wujing is found" },
+  "通天河": { "p": "tōng tiān hé", "d": "the River That Reaches to Heaven" },
+  "高老庄": { "p": "gāo lǎo zhuāng", "d": "Gao Family Village, where Zhu Bajie is found" },
+  "盘丝洞": { "p": "pán sī dòng", "d": "the Cave of the Silken Web, lair of the spider spirits" },
+  "车迟国": { "p": "chē chí guó", "d": "the Kingdom of Cart-Slow" },
+
+  "觔斗云": { "p": "jīn dǒu yún", "d": "the somersault cloud, one leap of 108,000 li" },
+  "觔斗": { "p": "jīn dǒu", "d": "a somersault (variant of 筋斗)" },
+  "如意金箍棒": { "p": "rú yì jīn gū bàng", "d": "the As-You-Will Gold-Banded Cudgel, Sun Wukong's weapon" },
+  "九齿钉钯": { "p": "jiǔ chǐ dīng pá", "d": "the nine-toothed rake, Zhu Bajie's weapon" },
+  "紧箍儿": { "p": "jǐn gū er", "d": "the tight-fillet; the golden headband that controls Sun Wukong" },
+  "锦襕袈裟": { "p": "jǐn lán jiā shā", "d": "the brocade cassock given to Tripitaka" },
+  "九环锡杖": { "p": "jiǔ huán xī zhàng", "d": "the nine-ringed monk's staff" },
+  "幌金绳": { "p": "huǎng jīn shéng", "d": "the Golden Rope, a treasure of the demon kings" }
+}

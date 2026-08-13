@@ -82,3 +82,8 @@ Content generation (only needed when changing the dictionary or adding a book):
 npm run update-dictionary
 npm run prepare-book
 ```
+
+Segmentation regression suite — run after any change to the segmenter, its constants, the book name list, or the dictionary parser:
+```bash
+npm run check-segmentation
+```

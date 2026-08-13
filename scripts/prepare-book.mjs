@@ -193,7 +193,11 @@ function cedictHeadwords(cedict) {
 async function loadNameList() {
   const file = resolve(HERE, 'book-names', `${BOOK.slug}.json`)
   try {
-    return JSON.parse(await readFile(file, 'utf8'))
+    const parsed = JSON.parse(await readFile(file, 'utf8'))
+    // Keys beginning with _ are notes for whoever edits the file.
+    return Object.fromEntries(
+      Object.entries(parsed).filter(([word]) => !word.startsWith('_'))
+    )
   } catch {
     console.log(`  (no curated name list at scripts/book-names/${BOOK.slug}.json)`)
     return {}

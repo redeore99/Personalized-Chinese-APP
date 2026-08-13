@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "update-dictionary": "node scripts/update-dictionary.mjs",
-    "prepare-book": "node scripts/prepare-book.mjs"
+    "prepare-book": "node scripts/prepare-book.mjs",
+    "check-segmentation": "node scripts/check-segmentation.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.100.0",

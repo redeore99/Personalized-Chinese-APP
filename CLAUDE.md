@@ -71,6 +71,12 @@ The old local PIN lock system has been removed. Do not describe it as the curren
   Offline CC-CEDICT dictionary: downloads `/dict/cedict_ts.u8.gz` (~3.8 MB gzipped, ~125k entries) from the app's own origin on demand into the Dexie `dict` table (device-local, never synced). Powers Add Card auto-fill, article/book segmentation (greedy longest match), and word lookups. It detects the gzip magic number so it works whether or not the host applies `Content-Encoding: gzip`, and refuses any download with fewer than `DICT_MIN_ENTRIES` (100k) entries. `getDictStatus()` reports `outdated: true` for devices still holding the old truncated dictionary so Settings can prompt a re-download.
   Historical note: this used to point at a third-party jsDelivr mirror that silently carried only 43,848 of ~125,000 entries. Do not repoint it at an unpinned third-party mirror.
   `parseCedictLine` keeps entries whose only definitions are cross-references ("see 沙悟净"), because dropping them removed 3,874 headwords the reader needs (悟净, 二郎, 一壁厢, 舍利子). The one exception is cross-references pointing exclusively at modern administrative divisions (县/区/市/镇/乡/街道): CC-CEDICT lists thousands of those and in classical text they collide with ordinary character pairs, so keeping them would segment 城中 ("in the city") and 灵山 (Vulture Peak) as single tokens glossed as counties in Guangxi. Net effect measured on 西游记: 1,239 headwords restored, 2,801 place names still excluded.
+- `src/lib/segment.js`
+  The segmenter, shared by the browser and `scripts/prepare-book.mjs` — keep it free of Dexie, DOM and Node imports or the build script breaks. Viterbi DP over a candidate set closed on the dictionary, so every token stays tappable; the older greedy leftmost-longest scan is gone because it committed to dictionary words straddling the real boundary (老师|父, 五|百年 "a century", 报道 "news report" for 报|道 "said"). Two hard guards: a candidate may not straddle a multi-character numeral run, and a multi-character candidate ending in 道 is rejected before a quote opener (90.6% of the book's 10,784 道-final sequences are reported speech). Word frequencies come from the text being segmented, or from `options.counts`; never wire in a modern frequency table, which fragments 我等, 怎的 and 却才.
+- `scripts/segmentation-cases.json` + `scripts/check-segmentation.mjs`
+  Reviewed regression fixture over real book excerpts, run with `npm run check-segmentation`. `fix` cases record what greedy got wrong, `keep` cases guard the classical vocabulary a frequency prior would trade away. Run it after touching the segmenter, its constants, the name list or the dictionary parser.
+- `scripts/book-names/<slug>.json`
+  Hand-curated proper nouns and Ming vocabulary CC-CEDICT lacks (老孙, 甚么, 却说, 弼马温, 觔斗云…), with pinyin and a gloss. Only words absent from CC-CEDICT and genuinely opaque belong here; transparent compounds such as 那怪 are deliberately excluded because splitting them teaches more. `prepare-book.mjs` folds them into the book lexicon.
 - `src/lib/books.js`
   Book catalog plus chapter loading: fetches `/books/<slug>/index.json` and `/books/<slug>/ch-NNN.json` on demand, caches chapters in the Dexie `bookChapters` table, and exposes a "save all chapters offline" bulk download.
 - `src/components/WordPopup.jsx`
@@ -78,7 +84,7 @@ The old local PIN lock system has been removed. Do not describe it as the curren
 - `scripts/update-dictionary.mjs`
   Refreshes `public/dict/cedict_ts.u8.gz` from the official MDBG CC-CEDICT release. Run with `npm run update-dictionary`. It is bundled rather than fetched at runtime because mdbg.net sends no CORS header.
 - `scripts/prepare-book.mjs`
-  Downloads a Project Gutenberg text, splits it into chapters, converts traditional to simplified using the bundled CC-CEDICT, and writes `public/books/<slug>/`. Run with `npm run prepare-book`. Requires the dictionary file to exist first.
+  Downloads a Project Gutenberg text, splits it into chapters, converts traditional to simplified using the bundled CC-CEDICT, and writes `public/books/<slug>/`. Run with `npm run prepare-book`. Requires the dictionary file to exist first. It also writes `lexicon.json`: book-wide word frequencies (~11k types, 57 KB gzipped) plus the curated name list, which the reader passes into the segmenter so a chapter is scored against the whole work rather than the page on screen. Book-wide counts measurably beat per-chapter counts and cost the device nothing, since the work happens here.
 - `src/data/econ1.js` / `src/data/radicals.js`
   Prebuilt deck content: Economics · Core (economics and finance vocabulary; the owner is an economist) and Radicals & Components (radical forms with Chinese radical names and example characters for reading skill).
 - `src/data/videos.js`
@@ -161,6 +167,8 @@ Examples:
 - If you add or regenerate a book:
   Run `npm run prepare-book` and commit the generated `public/books/<slug>/` files, then register the book in `src/lib/books.js`.
   Only use texts that are genuinely public domain, and record the source in the book entry.
+- If you touch segmentation:
+  Run `npm run check-segmentation`. It must stay green. If a case legitimately changes, update `scripts/segmentation-cases.json` in the same commit and say in the message why the new tokenisation is correct — never loosen a case to make the suite pass.
 - If you change the bundled dictionary:
   Run `npm run update-dictionary`, commit `public/dict/cedict_ts.u8.gz`, and tell the user every device must re-download the dictionary from Settings — the old copy stays in IndexedDB until then.
 

@@ -1,0 +1,98 @@
+{
+  "_comment": "Regression fixture for the reader's segmenter. Run with `npm run check-segmentation`. Every excerpt is real text from public/books/xiyouji and every expected tokenisation has been reviewed by hand. `fix` cases are ones the old greedy leftmost-longest scan got wrong and the current algorithm gets right — `wasGreedy` records the old output so a regression is obvious. `keep` cases are ones greedy already got right, including the classical vocabulary that a modern frequency prior would destroy; those exist so that tuning the scoring cannot quietly trade them away.",
+  "book": "xiyouji",
+
+  "fix": [
+    {
+      "text": "只见辕门外有人来报道：「那大圣引一群",
+      "expect": ["只见", "辕", "门外", "有人", "来", "报", "道", "那", "大圣", "引", "一", "群"],
+      "wasGreedy": ["只见", "辕", "门外", "有人", "来", "报道", "那", "大圣", "引", "一", "群"],
+      "note": "报道 before a quote is 报 + 道 'reported, saying', not 'a news report'"
+    },
+    {
+      "text": "一个石猴，应声高叫道：「我进去，我进",
+      "expect": ["一个", "石", "猴", "应声", "高", "叫", "道", "我", "进去", "我", "进"],
+      "wasGreedy": ["一个", "石", "猴", "应声", "高", "叫道", "我", "进去", "我", "进"],
+      "note": "quotative 道 is the speech verb and must not be absorbed by the preceding word"
+    },
+    {
+      "text": "掩。悟空喜道：「老师父果然注意与我传道",
+      "expect": ["掩", "悟空", "喜", "道", "老", "师父", "果然", "注意", "与", "我", "传道"],
+      "wasGreedy": ["掩", "悟空", "喜", "道", "老师", "父", "果然", "注意", "与", "我", "传道"],
+      "note": "老师父 is 老 + 师父 'venerable master', not 老师 'teacher' + 父"
+    },
+    {
+      "text": "化不得我。我老孙五百年前大闹天宫，被太",
+      "expect": ["化", "不得", "我", "我", "老孙", "五", "百", "年前", "大闹天宫", "被", "太"],
+      "wasGreedy": ["化", "不得", "我", "我", "老孙", "五", "百年", "前", "大闹天宫", "被", "太"],
+      "note": "百年 must not straddle the numeral run; the text says five hundred years ago, not 'a century'"
+    },
+    {
+      "text": "斗云，霎时间过了二百里水面。果见那厢有",
+      "expect": ["斗", "云", "霎时间", "过", "了", "二", "百", "里", "水面", "果", "见", "那", "厢", "有"],
+      "wasGreedy": ["斗", "云", "霎时间", "过", "了", "二", "百里", "水面", "果", "见", "那", "厢", "有"],
+      "note": "百里 is a surname in CC-CEDICT and must not be formed across a numeral boundary"
+    },
+    {
+      "text": "门来，高叫道：「甚么人在此搔扰？」猴",
+      "expect": ["门", "来", "高", "叫", "道", "甚么", "人", "在此", "搔扰", "猴"],
+      "wasGreedy": ["门", "来", "高", "叫道", "甚么", "人", "在此", "搔扰", "猴"],
+      "note": "甚么 comes from the book name list; CC-CEDICT has no entry for the Ming spelling"
+    },
+    {
+      "text": "来，不伤身体者，我等即拜他为王。」连",
+      "expect": ["来", "不", "伤", "身体", "者", "我等", "即", "拜", "他", "为", "王", "连"],
+      "wasGreedy": ["来", "不", "伤身", "体", "者", "我等", "即", "拜", "他", "为", "王", "连"],
+      "note": "伤身体 is 伤 + 身体; greedy split the real word 身体 in half"
+    },
+    {
+      "text": "那祖师即命大众引孙悟空出二门外，教他洒",
+      "expect": ["那", "祖师", "即", "命", "大众", "引", "孙悟空", "出", "二", "门外", "教", "他", "洒"],
+      "wasGreedy": ["那", "祖师", "即", "命大", "众", "引", "孙悟空", "出", "二", "门外", "教", "他", "洒"],
+      "note": "命大众 is 命 'to order' + 大众 'the assembly', not 命大 'lucky' + 众"
+    }
+  ],
+
+  "keep": [
+    {
+      "text": "，道：「陛下，诏老孙有何升赏？」玉帝",
+      "expect": ["道", "陛下", "诏", "老孙", "有", "何", "升", "赏", "玉帝"],
+      "note": "老孙, Sun Wukong's self-reference, comes from the book name list"
+    },
+    {
+      "text": "却说那花果山大小猴儿",
+      "expect": ["却说", "那", "花果山", "大小", "猴儿"],
+      "note": "却说, the storyteller's transition, from the book name list"
+    },
+    {
+      "text": "忙哈哈跪下道：「弼马温果是神通广大，末",
+      "expect": ["忙", "哈哈", "跪下", "道", "弼马温", "果", "是", "神通广大", "末"],
+      "note": "book name list entry, and 神通广大 must stay whole as a chengyu"
+    },
+    {
+      "text": "师父，你是唐姓，怎的和他是华宗？」三",
+      "expect": ["师父", "你", "是", "唐", "姓", "怎的", "和", "他", "是", "华", "宗", "三"],
+      "note": "怎的 is classical vocabulary a modern frequency prior would fragment"
+    },
+    {
+      "text": "幽冥界城门之外，却才醒悟。是我显神通",
+      "expect": ["幽冥", "界", "城门", "之外", "却才", "醒悟", "是", "我", "显", "神通"],
+      "note": "却才 likewise"
+    },
+    {
+      "text": "居此界终始如何，且听下回分解。",
+      "expect": ["居", "此", "界", "终", "始", "如何", "且听下回分解"],
+      "note": "the six-character chapter-closing formula must stay whole"
+    },
+    {
+      "text": "上界回奏。玉帝与观音菩萨、王母并众仙卿，",
+      "expect": ["上界", "回", "奏", "玉帝", "与", "观音菩萨", "王母", "并", "众", "仙", "卿"],
+      "note": "four-character deity names must stay whole"
+    },
+    {
+      "text": "」童子道：「我家师父正才下榻，登坛讲",
+      "expect": ["童子", "道", "我", "家", "师父", "正", "才", "下榻", "登", "坛", "讲"],
+      "note": "师父 (1,633 occurrences) is the single most important word in the book"
+    }
+  ]
+}
