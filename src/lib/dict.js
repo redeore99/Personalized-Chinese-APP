@@ -16,8 +16,6 @@ export const DICT_SOURCE_URL = '/dict/cedict_ts.u8.gz'
 // device is holding a stale or truncated copy and should re-download.
 export const DICT_MIN_ENTRIES = 100000
 
-const MAX_WORD_LENGTH = 8
-
 let dictMapPromise = null
 
 // Vercel may or may not decompress the .gz for us depending on how it
@@ -217,62 +215,7 @@ export function buildDictMap() {
   return dictMapPromise
 }
 
-const HANZI_PATTERN = /[㐀-䶿一-鿿]/
-
-export function isHanzi(char) {
-  return HANZI_PATTERN.test(char)
-}
-
-// Greedy longest-match segmentation against the dictionary plus the user's
-// own card characters. Non-hanzi runs are kept as plain text tokens.
-export function segmentText(text, dictMap, knownWords = new Set()) {
-  const tokens = []
-  const chars = Array.from(text || '')
-  let index = 0
-  let plainBuffer = ''
-
-  const flushPlain = () => {
-    if (plainBuffer) {
-      tokens.push({ text: plainBuffer, type: 'plain' })
-      plainBuffer = ''
-    }
-  }
-
-  while (index < chars.length) {
-    const char = chars[index]
-
-    if (!isHanzi(char)) {
-      plainBuffer += char
-      index += 1
-      continue
-    }
-
-    flushPlain()
-
-    let matched = null
-    const maxLength = Math.min(MAX_WORD_LENGTH, chars.length - index)
-    for (let length = maxLength; length >= 1; length--) {
-      const candidate = chars.slice(index, index + length).join('')
-      if (knownWords.has(candidate) || dictMap.has(candidate)) {
-        matched = candidate
-        break
-      }
-    }
-
-    if (matched) {
-      tokens.push({
-        text: matched,
-        type: 'word',
-        inDict: dictMap.has(matched),
-        known: knownWords.has(matched)
-      })
-      index += Array.from(matched).length
-    } else {
-      tokens.push({ text: char, type: 'word', inDict: false, known: knownWords.has(char) })
-      index += 1
-    }
-  }
-
-  flushPlain()
-  return tokens
-}
+// Segmentation lives in ./segment.js so the build script can import the same
+// implementation. Re-exported here because every existing call site imports it
+// from this module.
+export { isHanzi, segmentText, buildCorpusCounts } from './segment'

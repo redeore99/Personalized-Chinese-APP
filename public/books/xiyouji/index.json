@@ -920,5 +920,6 @@
       "hanzi": 5094,
       "file": "ch-100.json"
     }
-  ]
+  ],
+  "lexicon": "lexicon.json"
 }

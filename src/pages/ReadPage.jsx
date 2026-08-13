@@ -8,6 +8,7 @@ import {
   getBook,
   getBookCacheStatus,
   loadBookIndex,
+  loadBookLexicon,
   loadChapter
 } from '../lib/books'
 import {
@@ -53,6 +54,7 @@ export default function ReadPage({ onRefresh }) {
   const [dictReady, setDictReady] = useState(null)
   const [knownWords, setKnownWords] = useState(new Set())
   const [dictMap, setDictMap] = useState(null)
+  const [lexicon, setLexicon] = useState(null)
   const [settings, setSettings] = useState(DEFAULT_SETTINGS)
   const [selected, setSelected] = useState(null)
   const [decks, setDecks] = useState([])
@@ -75,15 +77,17 @@ export default function ReadPage({ onRefresh }) {
       getDictStatus(),
       getDeckOptions(),
       getMetaValue(SETTINGS_KEY),
-      getBookCacheStatus(slug)
+      getBookCacheStatus(slug),
+      loadBookLexicon(slug)
     ])
-      .then(([bookIndex, saved, dict, deckOptions, savedSettings, cache]) => {
+      .then(([bookIndex, saved, dict, deckOptions, savedSettings, cache, bookLexicon]) => {
         if (cancelled) return
         setIndex(bookIndex)
         setProgress(saved)
         setDictReady(Boolean(dict?.loaded))
         setDecks(deckOptions)
         setCacheStatus(cache)
+        setLexicon(bookLexicon)
         if (savedSettings) setSettings({ ...DEFAULT_SETTINGS, ...savedSettings })
       })
       .catch(err => !cancelled && setError(err.message))
@@ -191,6 +195,19 @@ export default function ReadPage({ onRefresh }) {
     setMetaValue(SETTINGS_KEY, next).catch(() => {})
   }
 
+  // The book's curated proper nouns join the dictionary so the segmenter can
+  // keep them whole and the popup has something to show for them.
+  const readerDict = useMemo(() => {
+    const names = lexicon?.names
+    if (!dictMap || !names || !Object.keys(names).length) return dictMap
+
+    const merged = new Map(dictMap)
+    for (const [word, info] of Object.entries(names)) {
+      if (!merged.has(word)) merged.set(word, [{ pinyin: info.p, defs: info.d }])
+    }
+    return merged
+  }, [dictMap, lexicon])
+
   // Segmentation always runs on the simplified text, because the dictionary is
   // keyed on simplified headwords and the user's cards are simplified. In
   // traditional mode the same token boundaries are reused to slice the
@@ -199,13 +216,14 @@ export default function ReadPage({ onRefresh }) {
   // Segmenting the traditional text directly instead would leave 31% of taps
   // with no definition and halve multi-character recognition.
   const paragraphs = useMemo(() => {
-    if (!chapter || !dictMap) return []
+    if (!chapter || !readerDict) return []
 
     const traditional = settings.script === 't'
+    const options = lexicon?.counts ? { counts: lexicon.counts } : {}
 
     return chapter.paragraphs.map(paragraph => {
       const source = paragraph.s
-      const tokens = segmentText(source, dictMap, knownWords)
+      const tokens = segmentText(source, readerDict, knownWords, options)
 
       if (!traditional || !paragraph.t || paragraph.t.length !== source.length) {
         return { verse: Boolean(paragraph.v), text: source, display: source, tokens }
@@ -227,7 +245,7 @@ export default function ReadPage({ onRefresh }) {
         tokens: mapped
       }
     })
-  }, [chapter, dictMap, settings.script, knownWords])
+  }, [chapter, readerDict, lexicon, settings.script, knownWords])
 
   const stats = useMemo(() => {
     if (!paragraphs.length) return null
@@ -248,7 +266,10 @@ export default function ReadPage({ onRefresh }) {
     if (token.type !== 'word') return
     // Lookup always uses the simplified form; the context line is shown in
     // whichever script the reader is currently reading.
-    const entries = await lookupWord(token.text)
+    const curated = lexicon?.names?.[token.text]
+    const entries = curated
+      ? [{ pinyin: curated.p, defs: curated.d }]
+      : await lookupWord(token.text)
     const source = paragraphs[paragraphIndex]?.display || paragraphs[paragraphIndex]?.text || ''
     setSelected({
       text: token.shown || token.text,
@@ -478,7 +499,7 @@ export default function ReadPage({ onRefresh }) {
                   (selected?.lookupText || selected?.text) === token.text ? 'reader-token-selected' : ''
                 ].join(' ')
 
-                const entry = settings.ruby ? dictMap?.get(token.text)?.[0] : null
+                const entry = settings.ruby ? readerDict?.get(token.text)?.[0] : null
 
                 return (
                   <span

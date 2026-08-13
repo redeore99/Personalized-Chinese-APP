@@ -15,11 +15,17 @@
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { gunzipSync } from 'node:zlib'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const PUBLIC_DIR = resolve(HERE, '..', 'public', 'books')
+
+// The reader and this script must segment identically, so both import the same
+// module rather than keeping two copies of the algorithm.
+const { buildCorpusCounts } = await import(
+  pathToFileURL(resolve(HERE, '..', 'src', 'lib', 'segment.js')).href
+)
 
 // The bundled dictionary written by scripts/update-dictionary.mjs. Using the
 // complete CC-CEDICT matters here: with a partial one, characters such as 築
@@ -170,6 +176,30 @@ function toSimplified(text, { words, chars }, stats) {
   return out
 }
 
+function cedictHeadwords(cedict) {
+  const words = new Set()
+  for (const line of cedict.split('\n')) {
+    if (!line || line.startsWith('#')) continue
+    const match = line.match(/^(\S+)\s+(\S+)\s+\[[^\]]+\]\s+\/.+\/\s*$/)
+    if (match) words.add(match[2])
+  }
+  return words
+}
+
+// Hand-curated proper nouns and Ming vocabulary that CC-CEDICT does not carry,
+// so the segmenter can keep them whole and the reader gets a real gloss instead
+// of 老 "old" + 孙 "grandson" for how the Monkey King refers to himself.
+// Shape: { "老孙": { "p": "lǎo sūn", "d": "this old Monkey (Sun Wukong ...)" } }
+async function loadNameList() {
+  const file = resolve(HERE, 'book-names', `${BOOK.slug}.json`)
+  try {
+    return JSON.parse(await readFile(file, 'utf8'))
+  } catch {
+    console.log(`  (no curated name list at scripts/book-names/${BOOK.slug}.json)`)
+    return {}
+  }
+}
+
 function stripGutenbergWrapper(raw) {
   const startMarker = raw.search(/\*\*\*\s*START OF/i)
   const endMarker = raw.search(/\*\*\*\s*END OF/i)
@@ -261,6 +291,7 @@ async function main() {
   const index = []
   let totalHanzi = 0
   let corrupted = 0
+  const corpus = []
 
   for (const chapter of chapters) {
     const paragraphs = chapter.blocks.map(paragraph => {
@@ -272,6 +303,8 @@ async function main() {
         ...(paragraph.verse ? { v: 1 } : {})
       }
     })
+
+    for (const paragraph of paragraphs) corpus.push(paragraph.s)
 
     const hanzi = paragraphs.reduce(
       (total, paragraph) => total + (paragraph.t.match(/[㐀-䶿一-鿿]/g) || []).length,
@@ -312,12 +345,39 @@ async function main() {
         },
         chapterCount: index.length,
         totalHanzi,
-        chapters: index
+        chapters: index,
+        lexicon: 'lexicon.json'
       },
       null,
       2
     ),
     'utf8'
+  )
+
+  // Word frequencies for the whole book, so a chapter is segmented against the
+  // statistics of the entire work rather than the page in front of the reader.
+  // Measured on 西游记, book-wide counts beat per-chapter counts (怪道 emitted
+  // as one wrong token 0 times vs 14) and cost nothing on the device, since the
+  // work happens here.
+  const names = await loadNameList()
+  const headwords = cedictHeadwords(cedict)
+  for (const word of Object.keys(names)) headwords.add(word)
+  const counts = buildCorpusCounts(corpus, headwords, new Set(), 1)
+
+  const trimmed = {}
+  let kept = 0
+  for (const [word, count] of counts) {
+    // Words seen once carry no signal and would double the payload.
+    if (count < 2) continue
+    trimmed[word] = count
+    kept += 1
+  }
+
+  const lexicon = JSON.stringify({ v: 1, counts: trimmed, names })
+  await writeFile(resolve(outDir, 'lexicon.json'), lexicon, 'utf8')
+  console.log(
+    `  lexicon: ${kept.toLocaleString()} word frequencies + ${Object.keys(names).length} book names ` +
+    `(${(lexicon.length / 1024).toFixed(0)} KB raw)`
   )
 
   const residual = [...stats.residual.entries()].sort((a, b) => b[1] - a[1])

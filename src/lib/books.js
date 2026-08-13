@@ -61,6 +61,41 @@ export async function loadBookIndex(slug) {
   }
 }
 
+const lexiconCache = new Map()
+
+/**
+ * Word frequencies for the whole book plus the curated proper nouns CC-CEDICT
+ * does not carry. Written by scripts/prepare-book.mjs. Segmenting a chapter
+ * against book-wide statistics rather than the page in front of the reader is
+ * what keeps 猴王道 from reading as 猴 + 王道 "the kingly way".
+ *
+ * Missing or malformed lexicons are not fatal: the reader falls back to
+ * deriving counts from the chapter itself.
+ */
+export async function loadBookLexicon(slug) {
+  if (lexiconCache.has(slug)) {
+    return lexiconCache.get(slug)
+  }
+
+  const promise = (async () => {
+    try {
+      const response = await fetch(`${BOOK_BASE}/${slug}/lexicon.json`)
+      if (!response.ok) return null
+
+      const data = await response.json()
+      return {
+        counts: new Map(Object.entries(data.counts || {})),
+        names: data.names || {}
+      }
+    } catch {
+      return null
+    }
+  })()
+
+  lexiconCache.set(slug, promise)
+  return promise
+}
+
 function chapterFile(n) {
   return `ch-${String(n).padStart(3, '0')}.json`
 }
