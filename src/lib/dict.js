@@ -44,6 +44,22 @@ function normalizePinyin(rawPinyin) {
   return rawPinyin.replace(/u:/gi, 'v').trim()
 }
 
+const CROSS_REFERENCE = /^see (also )?[一-鿿]/
+// CC-CEDICT carries thousands of modern counties and districts. In classical
+// text their names collide with ordinary character pairs, so a cross-reference
+// pointing at one is not worth keeping the headword for.
+const ADMINISTRATIVE_DIVISION = /^see (also )?[一-鿿]+(县|區|区|市|鎮|镇|鄉|乡|街道)$/
+
+// "see 沙悟淨|沙悟净[Sha1 Wu4 jing4]" reads badly in the popup, so the
+// traditional half and the bracketed pinyin are dropped for display.
+function tidyCrossReference(def) {
+  return def
+    .replace(/([一-鿿]+)\|([一-鿿]+)/g, '$2')
+    .replace(/\[[^\]]*\]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 function parseCedictLine(line) {
   if (!line || line.startsWith('#')) return null
 
@@ -52,11 +68,26 @@ function parseCedictLine(line) {
   if (!match) return null
 
   const [, trad, simp, pinyin, defsRaw] = match
-  const defs = defsRaw
+  const allDefs = defsRaw
     .split('/')
     .map(def => def.trim())
     .filter(Boolean)
-    .filter(def => !/^see (also )?[一-鿿]/.test(def))
+
+  // Cross-references are noise when a real definition exists, but dropping the
+  // headword when they are all it has removed 3,874 entries from the dictionary,
+  // including proper nouns this app needs (悟净, 二郎, 一壁厢, 舍利子). Those
+  // words then failed to segment as units and could not be looked up at all.
+  //
+  // The exception is administrative divisions: keeping those made things worse,
+  // because 城中 ("in the city") and 满城 ("the whole city") would each become a
+  // single token glossed as a district in Guangxi.
+  const substantive = allDefs.filter(def => !CROSS_REFERENCE.test(def))
+  let defs = substantive
+
+  if (!defs.length) {
+    const tidied = allDefs.map(tidyCrossReference)
+    defs = tidied.every(def => ADMINISTRATIVE_DIVISION.test(def)) ? [] : tidied
+  }
 
   if (!defs.length) return null
 
